@@ -1,0 +1,571 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.5.1-0-g916b5db  Build Version: 1.5.7152.31018
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="fr5_with_gripper">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-0.00031896 -0.00029673 0.042463"
+        rpy="0 0 0" />
+      <mass
+        value="1.6185" />
+      <inertia
+        ixx="0.0030836"
+        ixy="1.5354E-05"
+        ixz="-1.9315E-05"
+        iyy="0.0030825"
+        iyz="-1.7918E-05"
+        izz="0.0045209" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="shoulder_link">
+    <inertial>
+      <origin
+        xyz="-0.00019 -0.01828 0.00226"
+        rpy="0 0 0" />
+      <mass
+        value="4.64" />
+      <inertia
+        ixx="0.00938391"
+        ixy="-0.00005883"
+        ixz="-0.00003305"
+        iyy="0.0077422"
+        iyz="0.00022287"
+        izz="0.00932449" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/shoulder_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/shoulder_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="j1"
+    type="revolute">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="shoulder_link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-3.0543"
+      upper="3.0543"
+      effort="150"
+      velocity="3.15" />
+    <calibration
+      rising="0"
+      falling="0" />
+    <dynamics
+      damping="0"
+      friction="0" />
+    <safety_controller
+      soft_lower_limit="-3.0543"
+      soft_upper_limit="3.0543"
+      k_position="15"
+      k_velocity="10" />
+  </joint>
+  <link
+    name="upperarm_link">
+    <inertial>
+      <origin
+        xyz="0.21247 0.0 0.1212"
+        rpy="0 0 0" />
+      <mass
+        value="10.08" />
+      <inertia
+        ixx="0.02060496"
+        ixy="0.00028019"
+        ixz="0.00000262"
+        iyy="0.43899432"
+        iyz="-0.00000268"
+        izz="0.435456" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/upperarm_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/upperarm_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="j2"
+    type="revolute">
+    <origin
+      xyz="0 0 0.152"
+      rpy="1.5708 0 0" />
+    <parent
+      link="shoulder_link" />
+    <child
+      link="upperarm_link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-4.6251"
+      upper="1.4835"
+      effort="150"
+      velocity="3.15" />
+    <calibration
+      rising="0"
+      falling="0" />
+    <dynamics
+      damping="0"
+      friction="0" />
+    <safety_controller
+      soft_lower_limit="-4.6251"
+      soft_upper_limit="1.4835"
+      k_position="15"
+      k_velocity="10" />
+  </joint>
+  <link
+    name="forearm_link">
+    <inertial>
+      <origin
+        xyz="0.12262 0.00017 0.01259"
+        rpy="0 0 0" />
+      <mass
+        value="2.71" />
+      <inertia
+        ixx="0.00357541"
+        ixy="0.0000957"
+        ixz="0.00022485"
+        iyy="0.07148285"
+        iyz="0.00000343"
+        izz="0.07111915" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/forearm_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/forearm_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="j3"
+    type="revolute">
+    <origin
+      xyz="-0.425 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="upperarm_link" />
+    <child
+      link="forearm_link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-2.8274"
+      upper="2.8274"
+      effort="150"
+      velocity="3.15" />
+    <calibration
+      rising="0"
+      falling="0" />
+    <dynamics
+      damping="0"
+      friction="0" />
+    <safety_controller
+      soft_lower_limit="-2.8274"
+      soft_upper_limit="2.8274"
+      k_position="15"
+      k_velocity="10" />
+  </joint>
+  <link
+    name="wrist1_link">
+    <inertial>
+      <origin
+        xyz="0.00005 -0.00233 0.01468"
+        rpy="0 0 0" />
+      <mass
+        value="1.56" />
+      <inertia
+        ixx="0.00162595"
+        ixy="-0.00000285"
+        ixz="-0.00000347"
+        iyy="0.0015802"
+        iyz="0.00006131"
+        izz="0.00125526" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/wrist1_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/wrist1_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="j4"
+    type="revolute">
+    <origin
+      xyz="-0.39501 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="forearm_link" />
+    <child
+      link="wrist1_link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-4.6251"
+      upper="1.4835"
+      effort="28"
+      velocity="3.2" />
+    <calibration
+      rising="0"
+      falling="0" />
+    <dynamics
+      damping="0"
+      friction="0" />
+    <safety_controller
+      soft_lower_limit="-4.6251"
+      soft_upper_limit="1.4835"
+      k_position="15"
+      k_velocity="10" />
+  </joint>
+  <link
+    name="wrist2_link">
+    <inertial>
+      <origin
+        xyz="-0.00005 0.00233 0.01468"
+        rpy="0 0 0" />
+      <mass
+        value="1.56" />
+      <inertia
+        ixx="0.00162595"
+        ixy="-0.00000285"
+        ixz="0.00000347"
+        iyy="0.0015802"
+        iyz="-0.00006131"
+        izz="0.00125526" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/wrist2_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origins
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/wrist2_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="j5"
+    type="revolute">
+    <origin
+      xyz="0 0 0.1021"
+      rpy="1.5708 0 0" />
+    <parent
+      link="wrist1_link" />
+    <child
+      link="wrist2_link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-3.0543"
+      upper="3.0543"
+      effort="28"
+      velocity="3.2" />
+    <calibration
+      rising="0"
+      falling="0" />
+    <dynamics
+      damping="0"
+      friction="0" />
+    <safety_controller
+      soft_lower_limit="-3.0543"
+      soft_upper_limit="3.0543"
+      k_position="15"
+      k_velocity="10" />
+  </joint>
+  <link
+    name="wrist3_link">
+    <inertial>
+      <origin
+        xyz="0.00093 0.00081 -0.02005"
+        rpy="0 0 0" />
+      <mass
+        value="0.36" />
+      <inertia
+        ixx="0.00023009"
+        ixy="0.00000013"
+        ixz="0.00000098"
+        iyy="0.00023049"
+        iyz="0.00000085"
+        izz="0.0003593" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/wrist3_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://fr5_gripper_description/meshes/fairino5_v6/wrist3_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="j6"
+    type="revolute">
+    <origin
+      xyz="0 0 0.102"
+      rpy="-1.5708 0 0" />
+    <parent
+      link="wrist2_link" />
+    <child
+      link="wrist3_link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-3.0543"
+      upper="3.0543"
+      effort="28"
+      velocity="3.2" />
+    <calibration
+      rising="0"
+      falling="0" />
+    <dynamics
+      damping="0"
+      friction="0" />
+    <safety_controller
+      soft_lower_limit="-3.0543"
+      soft_upper_limit="3.0543"
+      k_position="15"
+      k_velocity="10" />
+  </joint>
+
+  <!-- ===== Tool flange (FR5 flange face, z = 0.099 m on wrist3_link) ===== -->
+  <link name="tool0" />
+  <joint name="flange_joint" type="fixed">
+    <origin xyz="0 0 0.099" rpy="0 0 0" />
+    <parent link="wrist3_link" />
+    <child link="tool0" />
+  </joint>
+
+  <!-- ===== Parallel gripper (DH PGI-140-80 style, 40 mm stroke per finger) ===== -->
+  <link name="gripper_base_link">
+    <inertial>
+      <origin xyz="-0.00099 0.00007 0.03850" rpy="0 0 0" />
+      <mass value="1.0" />
+      <inertia ixx="7.3455e-04" ixy="1.6731e-08" ixz="6.6156e-07" iyy="1.2197e-03" iyz="-6.8896e-07" izz="1.0581e-03" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://fr5_gripper_description/meshes/gripper/gripper_base.stl" />
+      </geometry>
+      <material name="gripper_base_link_mat">
+        <color rgba="0.25 0.25 0.28 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://fr5_gripper_description/meshes/gripper/gripper_base.stl" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="gripper_mount_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="tool0" />
+    <child link="gripper_base_link" />
+  </joint>
+
+  <link name="finger_right_link">
+    <inertial>
+      <origin xyz="0.05527 0.00673 0.11097" rpy="0 0 0" />
+      <mass value="0.06" />
+      <inertia ixx="3.2655e-05" ixy="5.3527e-07" ixz="-9.8521e-07" iyy="3.0147e-05" iyz="4.6361e-06" izz="8.6519e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://fr5_gripper_description/meshes/gripper/finger_right.stl" />
+      </geometry>
+      <material name="finger_right_link_mat">
+        <color rgba="0.75 0.75 0.78 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://fr5_gripper_description/meshes/gripper/finger_right.stl" />
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- positive = close -->
+  <joint name="finger_right_joint" type="prismatic">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="gripper_base_link" />
+    <child link="finger_right_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0" upper="0.04" effort="140" velocity="0.1" />
+  </joint>
+
+  <link name="finger_left_link">
+    <inertial>
+      <origin xyz="-0.05527 0.00673 0.11097" rpy="0 0 0" />
+      <mass value="0.06" />
+      <inertia ixx="3.2655e-05" ixy="-5.3527e-07" ixz="9.8521e-07" iyy="3.0147e-05" iyz="4.6361e-06" izz="8.6519e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://fr5_gripper_description/meshes/gripper/finger_left.stl" />
+      </geometry>
+      <material name="finger_left_link_mat">
+        <color rgba="0.75 0.75 0.78 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://fr5_gripper_description/meshes/gripper/finger_left.stl" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="finger_left_joint" type="prismatic">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="gripper_base_link" />
+    <child link="finger_left_link" />
+    <axis xyz="1 0 0" />
+    <limit lower="0" upper="0.04" effort="140" velocity="0.1" />
+    <mimic joint="finger_right_joint" multiplier="1" offset="0" />
+  </joint>
+
+  <!-- ===== TCP: between the finger pads ===== -->
+  <link name="tcp" />
+  <joint name="tcp_joint" type="fixed">
+    <origin xyz="0 0 0.14" rpy="0 0 0" />
+    <parent link="gripper_base_link" />
+    <child link="tcp" />
+  </joint>
+</robot>
