@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 1b6532ec1094d724baf635c99c8d6af2
+guid: 95b19871696d97c4cb1ad4402db9f220
 ScriptedImporter:
   internalIDToNameTable: []
   externalObjects: {}
@@ -8,10 +8,3 @@ ScriptedImporter:
   assetBundleName: 
   assetBundleVariant: 
   script: {fileID: 11500000, guid: 625f186215c104763be7675aa2d941aa, type: 3}
-AssetOrigin:
-  serializedVersion: 1
-  productId: 321033
-  packageName: "Conveyor Works \u2013 Low Poly Factory Asset Pack"
-  packageVersion: 1.1
-  assetPath: Assets/Conveyor Works/Shaders/ShaderMConveyorWorksAtlasMix.shadergraph
-  uploadId: 774250
