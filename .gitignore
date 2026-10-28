@@ -124,3 +124,9 @@ Assets/Conveyor Works/Scenes/FactoryExample/Lightmap-*
 Assets/Conveyor Works/Scenes/FactoryExample/ReflectionProbe-*
 Assets/Conveyor Works/Scenes/FactoryExample/*.bytes
 Assets/Conveyor Works/Scenes/FactoryExample/*.bytes.meta
+
+# Conveyor Works 파이프라인 전환용 소스 패키지.
+# 위 *.unitypackage 규칙의 예외: 이 프로젝트는 URP 를 쓰므로 URP 버전만 저장소에 둔다.
+# (Built-in / HDRP 버전은 계속 제외)
+!Assets/Conveyor Works/PipelineSupport/ConveyorWorks_URP_source.unitypackage
+!Assets/Conveyor Works/PipelineSupport/ConveyorWorks_URP_source.unitypackage.meta
