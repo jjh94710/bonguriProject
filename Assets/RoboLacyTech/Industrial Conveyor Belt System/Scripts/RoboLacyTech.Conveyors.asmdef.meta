@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: ce1ea6c38cb396d42a84a6deba5c98f4
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 318614
+  packageName: Industrial Conveyor Belt Pack - Belts and Rollers
+  packageVersion: 2.0
+  assetPath: Assets/RoboLacyTech/Industrial Conveyor Belt System/Scripts/RoboLacyTech.Conveyors.asmdef
+  uploadId: 941376

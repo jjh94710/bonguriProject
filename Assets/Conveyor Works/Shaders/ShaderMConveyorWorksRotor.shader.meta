@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 10e70adb44259394eaa035760f02e204
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 321033
+  packageName: "Conveyor Works \u2013 Low Poly Factory Asset Pack"
+  packageVersion: 1.1
+  assetPath: Assets/Conveyor Works/Shaders/ShaderMConveyorWorksRotor.shader
+  uploadId: 774250

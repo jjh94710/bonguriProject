@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 8847eab11bcc3204b83b58fd7d558c5d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 321033
+  packageName: "Conveyor Works \u2013 Low Poly Factory Asset Pack"
+  packageVersion: 1.1
+  assetPath: Assets/Conveyor Works/AnimatorController/HandlerConsoleAnimatorController.controller
+  uploadId: 774250

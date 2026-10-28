@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 773f620cbc44390498a6b258df025fef
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 321033
+  packageName: "Conveyor Works \u2013 Low Poly Factory Asset Pack"
+  packageVersion: 1.1
+  assetPath: Assets/Conveyor Works/ColliderAssets/PropContainerTransportCOL.asset
+  uploadId: 774250

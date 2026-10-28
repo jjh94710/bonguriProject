@@ -1,0 +1,109 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &8770507095214425170
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      propertyPath: m_Name
+      value: StructureFenceBarbedWire
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7721252863758531450}
+  m_SourcePrefab: {fileID: 100100000, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+--- !u!23 &2253448337030986895 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 7418205867551602909, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+  m_PrefabInstance: {fileID: 8770507095214425170}
+  m_PrefabAsset: {fileID: 0}
+--- !u!23 &2827795829262055016 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 6812047307323896378, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+  m_PrefabInstance: {fileID: 8770507095214425170}
+  m_PrefabAsset: {fileID: 0}
+--- !u!23 &6524310455228562945 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 2538931187532921427, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+  m_PrefabInstance: {fileID: 8770507095214425170}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &8464076166402259203 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: e94c9afa7f288004cb890cfbfb4e4a13, type: 3}
+  m_PrefabInstance: {fileID: 8770507095214425170}
+  m_PrefabAsset: {fileID: 0}
+--- !u!205 &7721252863758531450
+LODGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8464076166402259203}
+  serializedVersion: 2
+  m_LocalReferencePoint: {x: -0.0009946823, y: 0.17920919, z: 0.003977224}
+  m_Size: 3.4437966
+  m_FadeMode: 0
+  m_AnimateCrossFading: 0
+  m_LastLODIsBillboard: 0
+  m_LODs:
+  - screenRelativeHeight: 0.6
+    fadeTransitionWidth: 0
+    renderers:
+    - renderer: {fileID: 2827795829262055016}
+  - screenRelativeHeight: 0.3
+    fadeTransitionWidth: 0
+    renderers:
+    - renderer: {fileID: 2253448337030986895}
+  - screenRelativeHeight: 0.1
+    fadeTransitionWidth: 0
+    renderers:
+    - renderer: {fileID: 6524310455228562945}
+  m_Enabled: 1
