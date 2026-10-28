@@ -112,3 +112,15 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Conveyor Works 데모 씬(FactoryExample) 라이트 베이크 산출물.
+# Unity 가 Generate Lighting 으로 재생성하는 파일이고, LightingData.asset 하나가
+# 138MB 라 GitHub 파일당 100MB 제한에 걸린다. 베이크 결과는 저장소에 두지 않고
+# 필요한 사람이 각자 로컬에서 베이크한다.
+# (내 작업 씬의 베이크 데이터는 여기 포함되지 않으므로 그대로 추적된다)
+Assets/Conveyor Works/Scenes/FactoryExample/LightingData.asset
+Assets/Conveyor Works/Scenes/FactoryExample/LightingData.asset.meta
+Assets/Conveyor Works/Scenes/FactoryExample/Lightmap-*
+Assets/Conveyor Works/Scenes/FactoryExample/ReflectionProbe-*
+Assets/Conveyor Works/Scenes/FactoryExample/*.bytes
+Assets/Conveyor Works/Scenes/FactoryExample/*.bytes.meta

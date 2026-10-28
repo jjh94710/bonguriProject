@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1dc666f33571e3d498aa0d47858c3534
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 321033
+  packageName: "Conveyor Works \u2013 Low Poly Factory Asset Pack"
+  packageVersion: 1.1
+  assetPath: Assets/Conveyor Works/ColliderAssets/ContainerDrawerCOL.asset
+  uploadId: 774250

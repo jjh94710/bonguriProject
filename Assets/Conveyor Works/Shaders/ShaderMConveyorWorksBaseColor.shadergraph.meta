@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 46f178bf66e309b408af44c9b0fcf719
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 625f186215c104763be7675aa2d941aa, type: 3}
+AssetOrigin:
+  serializedVersion: 1
+  productId: 321033
+  packageName: "Conveyor Works \u2013 Low Poly Factory Asset Pack"
+  packageVersion: 1.1
+  assetPath: Assets/Conveyor Works/Shaders/ShaderMConveyorWorksBaseColor.shadergraph
+  uploadId: 774250
