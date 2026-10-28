@@ -1,0 +1,14 @@
+{
+    "name": "RoboLacyTech.Conveyors",
+    "rootNamespace": "RoboLacyTech.Conveyors",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
