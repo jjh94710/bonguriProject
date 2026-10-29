@@ -66,7 +66,7 @@ namespace Bonguri.ParcelTools
             Vector3 right = rotation * Vector3.right, up = rotation * Vector3.up;
             float width = Mathf.Abs(right.x) * paper.localScale.x + Mathf.Abs(right.z) * paper.localScale.z;
             float height = Mathf.Abs(up.x) * paper.localScale.x + Mathf.Abs(up.z) * paper.localScale.z;
-            Vector3 center = paper.localPosition + Vector3.up * (paper.localScale.y * .5f + .0005f);
+            Vector3 center = paper.localPosition + Vector3.up * (paper.localScale.y * .5f + .00005f);
             var regionTransform = label.Find("DestinationRegion");
             if (regionTransform == null) { regionTransform = new GameObject("DestinationRegion").transform; regionTransform.SetParent(label, false); }
             var region = regionTransform.GetComponent<TextMesh>(); if (region == null) region = regionTransform.gameObject.AddComponent<TextMesh>();
@@ -102,7 +102,7 @@ namespace Bonguri.ParcelTools
                 }
             }
             var line = label.Find("LabelAddressLine");
-            if (line != null) { line.localPosition = paper.localPosition + Vector3.up * .00035f - up * height * .095f; line.localScale = new Vector3(width * .80f, .00015f, height * .008f); Record(line); }
+            if (line != null) { line.localPosition = paper.localPosition + Vector3.up * (paper.localScale.y * .5f + .00015f) - up * height * .095f; line.localScale = new Vector3(width * .80f, .00015f, height * .008f); Record(line); }
             int original = controller.Code;
             foreach (int code in new[] { 10, 20, 30 })
             {
