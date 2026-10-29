@@ -50,6 +50,12 @@ public class LabelDatasetGenerator : MonoBehaviour
     [SerializeField, Range(0f, 10f)] float angleJitter = 2.5f;
     [SerializeField, Range(0f, 0.1f)] float positionJitter = 0.02f;
 
+    // 에디터 프리뷰가 '학습에 쓸 상자' 그대로 찍어볼 수 있게 열어둔다.
+    public GameObject BoxPrefab => boxPrefab;
+    public string BoxLayerName => boxLayerName;
+    public Vector3 LabelLocalNormal =>
+        labelLocalNormal.sqrMagnitude < 1e-6f ? Vector3.forward : labelLocalNormal.normalized;
+
     public string DatasetPath =>
         Path.GetFullPath(Path.Combine(Application.dataPath, "..", datasetFolder));
 

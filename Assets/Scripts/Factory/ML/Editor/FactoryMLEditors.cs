@@ -57,7 +57,7 @@ public class FaceCameraRigEditor : Editor
 
         using (new EditorGUI.DisabledScope(!rig.IsBuilt))
         {
-            if (GUILayout.Button("5면 찍어보기 (임시 상자 세우고 촬영)"))
+            if (GUILayout.Button("5면 찍어보기 (상자 세우고 촬영)"))
             {
                 PreviewCapture(rig);
             }
@@ -74,7 +74,8 @@ public class FaceCameraRigEditor : Editor
         }
     }
 
-    /// <summary>임시 상자를 송장이 위로 오게 세워두고 5면을 찍는다.</summary>
+    /// <summary>상자를 송장이 위로 오게 세워두고 5면을 찍는다.
+    /// 생성기에 Box Prefab 이 있으면 그걸 쓰고, 없으면 임시 상자를 만든다.</summary>
     static void PreviewCapture(FaceCameraRig rig)
     {
         var temps = new System.Collections.Generic.List<Object>();
@@ -83,10 +84,28 @@ public class FaceCameraRigEditor : Editor
 
         try
         {
-            int layer = SampleBox.ResolveLayer(SampleBox.DefaultLayerName);
-            box = SampleBox.Create(rig.BoxSize, layer, temps);
+            // 같은 오브젝트의 생성기에 Box Prefab 이 꽂혀 있으면 그 상자로 찍는다.
+            // 학습에 쓸 상자와 점검에 쓸 상자가 다르면 점검이 의미가 없다.
+            var gen = rig.GetComponent<LabelDatasetGenerator>();
+            GameObject prefab = gen != null ? gen.BoxPrefab : null;
+            Vector3 labelNormal = gen != null ? gen.LabelLocalNormal : Vector3.forward;
+            string layerName = gen != null ? gen.BoxLayerName : SampleBox.DefaultLayerName;
+
+            int layer = SampleBox.ResolveLayer(layerName);
+            if (prefab != null)
+            {
+                box = UnityEngine.Object.Instantiate(prefab);
+                box.name = "PreviewBox (temp)";
+                box.hideFlags = HideFlags.DontSave;
+                if (layer >= 0) SampleBox.SetLayerRecursively(box, layer);
+            }
+            else
+            {
+                box = SampleBox.Create(rig.BoxSize, layer, temps);
+            }
+
             box.transform.position = rig.BoxCenter;
-            box.transform.rotation = Quaternion.FromToRotation(Vector3.forward, Vector3.up);
+            box.transform.rotation = Quaternion.FromToRotation(labelNormal, Vector3.up);
 
             shots = rig.Capture();
 
@@ -107,7 +126,8 @@ public class FaceCameraRigEditor : Editor
             }
 
             // 콘솔 목록은 두 줄만 보여주므로 5면 값을 한 줄에 모은다.
-            Debug.Log($"[FaceCameraRig] {line}  →  판정 {rig.JudgeFace(ratios)}\nPNG: {dir}", rig);
+            string used = prefab != null ? prefab.name : "임시 상자";
+            Debug.Log($"[FaceCameraRig] ({used}) {line}  →  판정 {rig.JudgeFace(ratios)}\nPNG: {dir}", rig);
         }
         finally
         {
