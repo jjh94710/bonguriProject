@@ -1,0 +1,118 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &3918933217077432823
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 4275460233272763647, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_Name
+      value: ParcelBox_Process
+      objectReference: {fileID: 0}
+    - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 4275460233272763647, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8254413663669510627}
+  m_SourcePrefab: {fileID: 100100000, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+--- !u!4 &10613379367735227 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3911213757718961740, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+  m_PrefabInstance: {fileID: 3918933217077432823}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &952410790397818120 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4275460233272763647, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
+  m_PrefabInstance: {fileID: 3918933217077432823}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &8254413663669510627
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 952410790397818120}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bd4feb1f8c3e66b4b97c67e0dedc1b89, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BoxInfo
+  boxId: 
+  createdTime: 0
+  initialFace: 0
+  hasLabel: 1
+  labelNumber: 
+  labelRegion: 
+  label: {fileID: 10613379367735227}
+  numberText: {fileID: 0}
+  regionText: {fileID: 0}
+  state: 0
+  mode: 0
+  faceRatios:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  judgedFace: 0
+  rotationCount: 0
+  chosenRotation: {x: 0, y: 0, z: 0}
+  flipped: 0
+  labelFound: 0
+  readText: 
+  readRegion: 
+  unknownCount: 0
+  readOk: 0
+  retryCount: 0
+  check: 0
+  regionCode: -1
+  destination: 0
+  reason: 0
+  correctArriveTime: 0
+  readArriveTime: 0
+  finishTime: 0
