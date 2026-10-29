@@ -130,3 +130,6 @@ Assets/Conveyor Works/Scenes/FactoryExample/*.bytes.meta
 # (Built-in / HDRP 버전은 계속 제외)
 !Assets/Conveyor Works/PipelineSupport/ConveyorWorks_URP_source.unitypackage
 !Assets/Conveyor Works/PipelineSupport/ConveyorWorks_URP_source.unitypackage.meta
+
+# Local snapshots of scenes and scripts
+/Backups/
