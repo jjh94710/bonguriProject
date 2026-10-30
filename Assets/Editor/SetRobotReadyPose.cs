@@ -17,8 +17,8 @@ public static class SetRobotReadyPose
         try
         {
             var scene = SceneManager.GetActiveScene();
-            var arm = UnityEngine.Object.FindObjectsByType<ParcelArmIK>().First(a => a.name.Contains("first"));
-            string backup = "Backups/ReadyPose/" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "/bongyuri.unity";
+            var arm = UnityEngine.Object.FindObjectsByType<CorrectionSequence>().First(a => a.name.Contains("first"));
+            string backup = System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments) + "/UnityBackups/bonguriProject/ReadyPose/" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "/bongyuri.unity";
             Directory.CreateDirectory(Path.GetDirectoryName(backup));
             if (!EditorSceneManager.SaveScene(scene, backup, true)) throw new Exception("Backup failed");
             var model = new ArmKinematics(arm.transform, arm.tcp);

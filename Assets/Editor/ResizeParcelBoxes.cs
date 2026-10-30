@@ -22,7 +22,7 @@ namespace Bonguri.ParcelTools
             try
             {
                 string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-                string backup = "Assets/SceneBackups/ResizeParcels/" + stamp + "/bongyuri.unity";
+                string backup = System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments) + "/UnityBackups/bonguriProject/SceneBackups/ResizeParcels/" + stamp + "/bongyuri.unity";
                 Directory.CreateDirectory(Path.GetDirectoryName(backup));
                 if (!EditorSceneManager.SaveScene(scene, backup, true)) throw new Exception("Scene backup failed");
                 var paths = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" })
@@ -32,7 +32,7 @@ namespace Bonguri.ParcelTools
                     .OrderBy(p => PrefabUtility.GetPrefabAssetType(AssetDatabase.LoadAssetAtPath<GameObject>(p)) == PrefabAssetType.Variant ? 1 : 0).ToArray();
                 foreach (string path in paths)
                 {
-                    string copy = "Backups/ResizeParcels/" + stamp + "/" + path;
+                    string copy = System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments) + "/UnityBackups/bonguriProject/ResizeParcels/" + stamp + "/" + path;
                     Directory.CreateDirectory(Path.GetDirectoryName(copy)); File.Copy(path, copy);
                     var contents = PrefabUtility.LoadPrefabContents(path);
                     try { Resize(contents.transform); if (PrefabUtility.SaveAsPrefabAsset(contents, path) == null) throw new Exception("Prefab save failed: " + path); }

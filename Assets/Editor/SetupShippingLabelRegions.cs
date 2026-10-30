@@ -29,14 +29,14 @@ namespace Bonguri.ParcelTools
                 font.RequestCharactersInTexture("102030서울특별시경기도충청도", 80, FontStyle.Normal);
                 foreach (char c in "서울특별시경기도충청도") if (!font.HasCharacter(c)) throw new Exception("Missing Korean glyph: " + c);
                 string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-                string backup = "Assets/SceneBackups/LabelRegions/" + stamp + "/bongyuri.unity";
+                string backup = System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments) + "/UnityBackups/bonguriProject/SceneBackups/LabelRegions/" + stamp + "/bongyuri.unity";
                 Directory.CreateDirectory(Path.GetDirectoryName(backup));
                 if (!EditorSceneManager.SaveScene(scene, backup, true)) throw new Exception("Scene backup failed");
                 int prefabs = 0;
                 foreach (string path in Paths)
                 {
                     if (!File.Exists(path)) continue;
-                    string copy = "Backups/LabelRegions/" + stamp + "/" + path;
+                    string copy = System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments) + "/UnityBackups/bonguriProject/LabelRegions/" + stamp + "/" + path;
                     Directory.CreateDirectory(Path.GetDirectoryName(copy)); File.Copy(path, copy);
                     var root = PrefabUtility.LoadPrefabContents(path);
                     try
