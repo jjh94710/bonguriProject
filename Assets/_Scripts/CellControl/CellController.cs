@@ -7,7 +7,7 @@ using UnityEngine;
 //  전체 공정을 순서대로 진행하는 총괄 스크립트.                           
 //      - 교정 스테이션과 판독 스테이션을 코루틴 2개로 동시에 돌린다.
 //      - 상자가 터미널 컨테이너나 NG 토트에 들어가면 Finish()로 최종 상태를 정하고 집계한다.
-//      - 이상 상황은 Raise()로 알리고, 같은 경고가 연속되면 알람으로 멈춘다.
+//      - 이상 상황은 RaiseAlarm()로 알리고, 같은 경고가 연속되면 알람으로 멈춘다.
 //
 ///// : TODO : 현재는 골격만 세워진 단계
 //  [골격 단계] 설정 복사, 설비 상태, 운전 명령, 제어 방식, 알람, 집계까지 들어 있다.
@@ -31,10 +31,16 @@ public class CellController : MonoBehaviour
     [Tooltip("같은 경고가 이 횟수만큼 연속되면 알람으로 멈춘다 (default: 3)")]
     [Min(1)][SerializeField] int maxConsecutiveErrors = 3;
 
+    //  ---------------- 연결 ----------------
+    [Header("연결")]
+    [Tooltip("교정 스테이션 구간 (정지 위치가 있는 ConveyorLine)")]
+    [SerializeField] ConveyorLine correctLine;
+
+    [Tooltip("판독 스테이션 구간 (정지 위치가 있는 ConveyorLine)")]
+    [SerializeField] ConveyorLine readLine;
+
                     ///// : TODO : 
     //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
-    //  ---------------- 연결 ----------------
-    //      correctLine · readLine (ConveyorLine)    교정 · 판독 스테이션 구간
     //      feeder (BoxFeeder)                       상자 투입
     //      faceRig (FaceCameraRig)                  카메라 5대 송장 위치 측정
     //      correction (CorrectionSequence)          교정 로봇암 동작
@@ -80,12 +86,13 @@ public class CellController : MonoBehaviour
     public float ExceptionRate => Processed > 0 ? (float)Exceptions / Processed : 0f;
 
     /// 운전 중인지 (Run()을 부른 뒤 끝나기 전까지)
-    public bool IsRunning => runRoutine != null;
+    /// [!] RunRoutine()이 시작하자마자 true로 바꾼다. 스테이션 코루틴이 바로 이 값을 보고 돌기 때문.
+    public bool IsRunning { get; private set; }
 
     /// 이상 상황 알림 (종류, 상자 ID) --> AlarmUI가 구독
     public event System.Action<string, string> OnAlarm;
 
-    Coroutine runRoutine;                                   //  지금 돌고 있는 운전 코루틴
+    //Coroutine runRoutine;                                   //  지금 돌고 있는 운전 코루틴
     bool stopRequested;                                     //  사이클 정지를 눌렀는지
     bool alarmActive;                                       //  알람으로 멈춘 상태인지 (ResetAlarm()으로 해제)
     string lastAlarmType;                                   //  마지막 경고 종류 (연속 횟수 세기용)
@@ -115,9 +122,7 @@ public class CellController : MonoBehaviour
     void Update()
     {
         while (finishTimes.Count > 0 && Time.time - finishTimes.Peek() > 60f)
-        {
-            finishTimes.Dequeue();
-        }
+            { finishTimes.Dequeue(); }
     }
 
 
@@ -140,7 +145,7 @@ public class CellController : MonoBehaviour
         }
         if (!Check()) { return; }
 
-        runRoutine = StartCoroutine(RunRoutine(Mathf.Max(0, count)));     //  음수는 연속 운전(0)으로 본다
+        StartCoroutine(RunRoutine(Mathf.Max(0, count)));     //  음수는 연속 운전(0)으로 본다
     }
 
     // 사이클 정지. 투입을 멈추고, 처리 중인 상자를 끝낸 뒤 정지한다.
@@ -280,16 +285,17 @@ public class CellController : MonoBehaviour
     /// 끝나는 조건: 알람, 상자 count개 처리(count > 0), 사이클 정지 후 처리 중인 상자 없음
     IEnumerator RunRoutine(int count)
     {
+        IsRunning = true;
         stopRequested = false;
         int target = Processed + count;
         Mode = PendingMode;
         State = CellState.Running;
         Debug.Log($"[Cell] 운전 시작 | {(count > 0 ? $"상자 {count}개" : "연속 운전")} | 제어 방식 {Mode}", this);
 
-                    ///// : TODO : 
+        ///// : TODO : 
         //  [다음 단계] count > 0이면 feeder.FeedOne()을 count번, 0이면 feeder.StartFeeding()
-        StartCoroutine(CorrectStationLoop());
-        StartCoroutine(ReadStationLoop());
+        Coroutine correctLoop = StartCoroutine(CorrectStationLoop());
+        Coroutine readLoop = StartCoroutine(ReadStationLoop());
 
         while (!alarmActive)
         {
@@ -298,8 +304,11 @@ public class CellController : MonoBehaviour
             yield return null;
         }
 
+        //  스테이션 코루틴을 멈춘다. 멈추고 곧바로 다시 Run()을 눌러도 코루틴이 두 벌로 돌지 않게 한다
+        StopCoroutine(correctLoop);
+        StopCoroutine(readLoop);
         State = CellState.Stopped;
-        runRoutine = null;
+        IsRunning = false;
         Debug.Log($"[Cell] 운전 끝 | {Summary()}", this);
     }
 
@@ -312,24 +321,70 @@ public class CellController : MonoBehaviour
     }
 
     // 교정 스테이션: 도착 대기 → JudgeAndCorrect() → 판독 구간으로 이송    (FR-03, FR-05, FR-06, FR-16)
-    /// [ConveyorLine 구현 후] ConveyorLine 연결 후 채운다.
+    /// 운전이 끝날 때까지 상자를 하나씩 처리한다. 판독 구간 입구가 비어야 보낸다. (FR-16)
     IEnumerator CorrectStationLoop()
     {
-        yield break;
+        while(IsRunning)
+        {
+            //  1) 정지 위치에 상자가 올 때까지 기다린다
+            if(!correctLine.HasBoxAtStop)
+                { yield return null; continue; }
+
+            BoxInfo box = correctLine.CurrentBox;
+            box.correctArriveTime = Time.time;
+            Mode = PendingMode;         // 제어 방식은 상자 단위로 바뀐다 (FR-12)
+            box.mode = Mode;
+            box.state = BoxState.Judging;
+            Debug.Log($"[Cell] 교정 스테이션 도착 | {box.boxId} | 제어 방식 {Mode}", this);
+
+            //  2) 측정 · 교정
+            yield return JudgeAndCorrect(box);
+
+            //  3) 판독 구간 입구가 빌 때까지 기다렸다가 보낸다. 그 사이 운전이 끝나면 상자는 그 자리에 둔다
+            while (IsRunning && !readLine.CanAccept) { yield return null; }
+            if (!IsRunning) { yield break; }
+
+            box.state = BoxState.Transferring;
+            correctLine.Release();
+        }
     }
 
     // 측정 → 행동 선택(완료 또는 회전) → 회전 뒤 다시 측정. 완료가 나오거나 제한 시간이 될 때까지 반복.
     /// [Correction ML 준비 완료 후] FaceCameraRig, CorrectionSequence, CorrectionAgent 연결 후 채운다.
     IEnumerator JudgeAndCorrect(BoxInfo box)
     {
-        yield break;
+                            ///// : TODO :
+        //  [Correction ML 준비 완료 후] 아래 자리 표시(작업 시간 1초 흉내)를 지우고 실제 동작으로 바꾼다 
+        yield return new WaitForSeconds(1f);
     }
 
     // 판독 스테이션: 도착 대기 → 판독 → 검증 → box.destination 기록 → 분류 구간으로 이송    (FR-04, FR-07)
+    /// 운전이 끝날 때까지 상자를 하나씩 처리한다.
     /// [Label ML 준비 완료 후] LabelReaderAgent, LabelValidator 연결 후 채운다.
     IEnumerator ReadStationLoop()
     {
-        yield break;
+        while(IsRunning)
+        {
+            //  1) 정지 위치에 상자가 올 때까지 기다린다
+            if(!readLine.HasBoxAtStop)
+                { yield return null; continue; }
+
+            BoxInfo box = readLine.CurrentBox;
+            box.readArriveTime = Time.time;
+            box.state = BoxState.Reading;
+            Debug.Log($"[Cell] 판독 스테이션 도착 | {box.boxId} | 교정 -> 판독 {box.readArriveTime - box.correctArriveTime:F1}초", this);
+
+            //  2) 판독 · 검증
+            ///// : TODO :
+            //  [Label ML 준비 완료 후] reader.Read(box) -> LabelValidator.Validate -> box.destination 기록.
+            //  지금은 자리 표시(작업 시간 1초 흉내)만 둔다.
+            yield return new WaitForSeconds(1f);
+            if (!IsRunning) { yield break; }
+
+            //  3) 분류 구간으로 보낸다
+            box.state = BoxState.Sorting;
+            readLine.Release();
+        }
     }
 
 
@@ -341,7 +396,10 @@ public class CellController : MonoBehaviour
     // 필수 칸 확인. 빠진 칸이 있으면 이름을 알려 주고 false.
     bool Check()
     {
-        string missing = settings == null ? "Settings" : null;
+        string missing = settings == null ? "Settings"
+                       : correctLine == null ? "Correct Line"
+                       : readLine == null ? "Read Line"
+                       : null;
         if (missing == null) { return true; }
 
         Debug.LogWarning($"[Cell] {missing} 칸이 비어 있어 운전을 시작하지 않습니다.", this);
