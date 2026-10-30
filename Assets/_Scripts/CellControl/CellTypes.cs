@@ -10,9 +10,10 @@
 //         화면에는 한글 이름(예: 송장 미검출)으로 바꿔 보여 준다.
 //  ============================================================
 
-/// 송장면이 향한 방향 (위 1, 측면 4, 바닥 1).
+/// 송장면이 향한 방향 (위 1, 측면 4, 바닥 1) 정해지지 않음(None).
 /// 기준은 월드 축이다. 면별 방향은 BoxInfo.FaceDirection에 있다.
 /// [용도] 투입 방향 배정(BoxFeeder), 카메라 판정(FaceCameraRig), 교정 회전 선택
+/// [!] None은 맨 뒤에 둔다. 0~5(Top~Bottom)를 번호로 도는 반복문과 faceRatios 칸 번호가 그대로 맞는다.
 public enum BoxFace
 {
     Top,        //  위 (+Y). 판독 스테이션은 이 면의 송장만 읽는다
@@ -20,22 +21,24 @@ public enum BoxFace
     Back,       //  뒤 (+Z)
     Left,       //  왼쪽 (−X)
     Right,      //  오른쪽 (+X)
-    Bottom      //  바닥 (−Y). 180° 뒤집어야 위로 온다
+    Bottom,     //  바닥 (−Y). 180° 뒤집어야 위로 온다
+    None        //  정해지지 않음 (배정·판정 전, 송장 없는 상자). 카메라 판정 결과로는 쓰지 않는다.
 }
 
 /// 상자 1개의 현재 상태.
-/// 공정 순서: Moving → Judging ⇄ Correcting → Transferring → Reading → Sorting → Loaded 또는 Exception
-/// [주의] Reading, Sorting은 v0.3에서 추가되어 맨 뒤에 있다. 숫자 순서와 공정 순서가 다르다.
+/// 공정 순서: Moving → Judging ⇄ Correcting → Transferring → Reading → Sorting → Loading → Loaded 또는 Exception
+/// [주의] Reading, Sorting은 v0.3에서 추가되어 맨 뒤에 있다. Loading은 v0.5에서 추가, Loaded&Exception 또한 맨 뒤로 재배치.
 public enum BoxState
 {
     Moving,         //  교정 스테이션까지 컨베이어로 이동 중
     Judging,        //  교정 스테이션: 카메라 5대로 송장 위치를 재는 중
     Correcting,     //  교정 스테이션: 로봇암이 상자를 돌리는 중
     Transferring,   //  교정 스테이션 → 판독 스테이션으로 이송 중 (FR-16)
-    Loaded,         //  [끝] 터미널 컨테이너에 적재됨 (분류 성공)
-    Exception,      //  [끝] NG 토트로 배출됨 (예외)
     Reading,        //  판독 스테이션: 송장을 읽는 중
-    Sorting         //  분류 구간: 푸셔 쪽으로 이동 중
+    Sorting,        //  분류 구간: 푸셔 쪽으로 이동 중
+    Loading,        //  터미널 끝: 흡착 로봇이 컨테이너로 옮기는 중
+    Loaded,         //  [끝] 터미널 컨테이너에 적재됨 (분류 성공)
+    Exception       //  [끝] NG 토트로 배출됨 (예외)
 }
 
 /// 예외 사유. None이 아니면 그 상자의 목적지는 NG가 된다 (BoxInfo.Mark).
@@ -45,7 +48,7 @@ public enum ExceptionReason
     NoLabel,        //  송장 미검출: 판독 스테이션 윗면에서 송장을 찾지 못함 (FR-06)
     ReadFail,       //  판독 실패: 재시도 후에도 모름 칸이 남음, 또는 숫자가 5자리가 아님 (FR-04)
     RuleViolation,  //  번호 규칙 위반: 지역 코드가 없거나 주소 지역과 다름 (FR-07)
-    CorrectionFail, //  교정 실패: IK 계산 실패, 동작 시간 초과 (FR-05)
+    CorrectionFail, //  교정 실패: IK 계산 실패, 동작 시간 초과, 잡기 실패 · 회전 중 놓침, 내려놓은 자리 벗어남 (FR-05)
     TransferFail,   //  이송 실패: 상자가 벨트를 벗어나거나 스토퍼를 넘음 (FR-02, FR-16)
     JudgeFail       //  측정 실패: 카메라 영상을 받지 못함 (FR-03)
 }

@@ -10,7 +10,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 4275460233272763647, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
       propertyPath: m_Name
-      value: ParcelBox_Process
+      value: ParcelBox_ProcessVariant
       objectReference: {fileID: 0}
     - target: {fileID: 8215757395651013639, guid: 1ec6a25da06b16a4fa4d0de615602583, type: 3}
       propertyPath: m_LocalPosition.x
@@ -84,7 +84,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BoxInfo
   boxId: 
   createdTime: 0
-  initialFace: 0
+  initialFace: 6
   hasLabel: 1
   labelNumber: 
   labelRegion: 
@@ -99,7 +99,7 @@ MonoBehaviour:
   - 0
   - 0
   - 0
-  judgedFace: 0
+  judgedFace: 6
   rotationCount: 0
   chosenRotation: {x: 0, y: 0, z: 0}
   flipped: 0

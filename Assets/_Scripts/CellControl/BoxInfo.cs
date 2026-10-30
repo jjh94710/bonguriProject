@@ -10,11 +10,13 @@ using UnityEngine;
 //  다른 스크립트는 box의 값만 읽는다. → 벨트 위에 상자가 여러 개 있어도 결과가 섞이지 않는다.
 //
 //  [기록 순서] BoxFeeder(투입) → FaceCameraRig(측정) → 기본 제어 또는 CorrectionAgent(회전)
-//             → LabelReaderAgent(판독) → LabelValidator(검증) → 푸셔(분류) → CellController.Finish(최종 상태)
+//             → LabelReaderAgent(판독) → LabelValidator(검증) → 푸셔(분류) → 끝 로봇(적재) → CellController.Finish(최종 상태)
 //  [확인 방법] Play 중 Hierarchy에서 상자를 선택하면 Inspector에서 값이 바뀌는 것을 볼 수 있다.
 //  [송장 글자] numberText · regionText는 설계서대로 TextMeshPro(TMP)이다.
 //             [!] 원본 상자 Prefab(ParcelBox, 봉현님)의 글자는 TextMesh라서 그대로 두고,
-//             [!] 공정용 Variant에서 TextMesh 글자를 끄고 TMP 글자를 새로 둔다 (4단계 LabelLayout).
+//             [!] 공정용 Variant에서 TextMesh 글자를 끄고 TMP 글자를 새로 둔다
+                    /////   : TODO :
+//             (4단계(LabelLayout) 확인이 끝나면 아래 줄 지우기)
 //             그 전까지 두 칸이 비어 있어도 1 ~ 3단계는 동작한다.
 //  ============================================================
 [DisallowMultipleComponent]
@@ -28,8 +30,8 @@ public class BoxInfo : MonoBehaviour
     [Tooltip("생성 시각 (Time.time, 초)")]
     public float createdTime;
 
-    [Tooltip("투입할 때 배정한 송장면 방향")]
-    public BoxFace initialFace = BoxFace.Top;
+    [Tooltip("투입할 때 배정한 송장면 방향. 배정 전에는 None")]
+    public BoxFace initialFace = BoxFace.None;
 
     [Tooltip("송장을 붙였는지. false면 송장 미부착 상자")]
     public bool hasLabel = true;
@@ -65,8 +67,8 @@ public class BoxInfo : MonoBehaviour
     [Tooltip("카메라 5대의 송장 색 비율 (0 위, 1 앞, 2 뒤, 3 왼쪽, 4 오른쪽). FaceCameraRig.Measure가 기록")]
     public float[] faceRatios = new float[5];
 
-    [Tooltip("규칙 판정: 비율이 가장 큰 면. 모두 기준 미만이면 Bottom (기본 제어용)")]
-    public BoxFace judgedFace = BoxFace.Top;
+    [Tooltip("규칙 판정: 비율이 가장 큰 면. 모두 기준 미만이면 Bottom, 판정 전에는 None (기본 제어용)")]
+    public BoxFace judgedFace = BoxFace.None;
 
     [Tooltip("교정 스테이션에서 회전한 횟수")]
     public int rotationCount;
@@ -128,12 +130,12 @@ public class BoxInfo : MonoBehaviour
     //  ============================================================
     /// 송장이 "지금" 향한 면. label의 위쪽(+Y)을 6개 면 방향과 비교해 가장 가까운 면을 고른다.
     /// [용도] CorrectionAgent 학습 보상, 테스트 확인. 공정의 판단은 카메라 측정값(faceRatios)으로 한다.
-    /// [주의] 송장 오브젝트가 연결되지 않았으면 Bottom을 돌려준다 ("위가 아님"으로 처리).
+    /// [주의] 송장 오브젝트가 연결되지 않았거나 송장 미부착 상자(label == null || !hasLabel)면 None을 돌려준다.
     public BoxFace LabelFaceNow
     {
         get
         {
-            if (label == null) { return BoxFace.Bottom; }
+            if (label == null) { return BoxFace.None; }
 
             Vector3 normal = label.up;          //  송장 종이가 바라보는 방향 (월드 좌표)
             BoxFace best = BoxFace.Top;
@@ -187,7 +189,8 @@ public class BoxInfo : MonoBehaviour
             case BoxFace.Back: { return Vector3.forward; }   //  +Z
             case BoxFace.Left: { return Vector3.left; }      //  −X
             case BoxFace.Right: { return Vector3.right; }     //  +X
-            default: { return Vector3.down; }      //  Bottom: −Y
+            case BoxFace.Bottom: { return Vector3.down; }       // -Y
+            default: { return Vector3.zero; }      //  None: 방향 없음
         }
     }
 
@@ -196,6 +199,9 @@ public class BoxInfo : MonoBehaviour
     /// [전제] 송장이 상자 Prefab의 위쪽(+Y) 면에 붙어 있다 (ParcelBox Prefab의 ShippingLabel).
     public static Quaternion RotationFor(BoxFace face, float yaw = 0f)
     {
+        //  방향이 없으면 기본 자세 (송장 위)
+        if (face == BoxFace.None) { return Quaternion.Euler(0f, yaw, 0f); }
+
         //  ① 위쪽 축 둘레로 yaw만큼 돌리고  ② 위쪽(+Y)을 face 방향으로 기울인다
         return Quaternion.FromToRotation(Vector3.up, FaceDirection(face)) * Quaternion.Euler(0f, yaw, 0f);
     }
@@ -241,6 +247,12 @@ public class BoxInfo : MonoBehaviour
     [ContextMenu("테스트/다음 면으로 돌려 보기")]
     void TestNextFace()
     {
+        if (LabelFaceNow == BoxFace.None)
+        {
+            Debug.LogWarning($"[BoxInfo] {name}: 송장이 없어 돌려 볼 수 없습니다.", this);
+            return;
+        }
+
         BoxFace next = (BoxFace)(((int)LabelFaceNow + 1) % 6);   //  Top → Front → … → Bottom → Top
         transform.rotation = RotationFor(next);
 
