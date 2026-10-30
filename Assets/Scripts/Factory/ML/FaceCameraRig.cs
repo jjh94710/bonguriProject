@@ -43,10 +43,14 @@ public class FaceCameraRig : MonoBehaviour
     [SerializeField] Color background = Color.black;
 
     [Header("송장 색 비율 (기본 제어 판정)")]
-    [Tooltip("송장 바탕색. 학습 모델이 없을 때 이 색의 비율로 면을 고른다.")]
-    [SerializeField] Color labelColor = new Color(0.96f, 0.94f, 0.86f);
+    // 송장 바탕색을 절대 RGB 로 맞춰보던 때는 빛을 덜 받는 앞면·왼쪽면 송장을 놓쳤다.
+    // 평가셋 100 상자 중 91 개만 맞아 FR-03 인수 기준(95 개)에 못 미쳤다.
+    // 채도는 밝기에 같이 곱해지지 않으므로, 어두운 면에서도 흰 종이를 그대로 가려낸다.
+    [Tooltip("채도가 이 값보다 낮으면 송장 종이로 본다. 골판지 0.71, 테이프 0.57, 송장 0.10.")]
+    [SerializeField, Range(0f, 1f)] float labelMaxSaturation = 0.35f;
 
-    [SerializeField, Range(0f, 1f)] float colorTolerance = 0.18f;
+    [Tooltip("이보다 어두우면 배경으로 보고 뺀다. 검은 배경도 채도가 0 이라 같이 걸리는 것을 막는다.")]
+    [SerializeField, Range(0f, 1f)] float labelMinBrightness = 0.35f;
 
     [Tooltip("이 비율 이상이면 그 면에 송장이 보인다고 본다.")]
     [SerializeField, Range(0f, 1f)] float labelPixelRatio = 0.05f;
@@ -282,20 +286,29 @@ public class FaceCameraRig : MonoBehaviour
         return ratios;
     }
 
+    /// <summary>
+    /// 그림에서 송장 종이로 보이는 픽셀 비율. 채도가 낮고 충분히 밝은 픽셀을 센다.
+    /// 5000 장으로 재보니 송장이 보이는 면은 최소 0.080, 안 보이는 면은 최대 0.004 였다.
+    /// 기준값 labelPixelRatio(0.05) 가 그 사이에 있어 여유가 22 배다.
+    /// </summary>
     public float LabelRatio(Texture2D tex)
     {
         Color32[] px = tex.GetPixels32();
         if (px.Length == 0) return 0f;
 
-        float tol = colorTolerance * 255f;
-        float lr = labelColor.r * 255f, lg = labelColor.g * 255f, lb = labelColor.b * 255f;
+        float vmin = labelMinBrightness * 255f;
 
         int hit = 0;
         for (int i = 0; i < px.Length; i++)
         {
-            if (Mathf.Abs(px[i].r - lr) <= tol &&
-                Mathf.Abs(px[i].g - lg) <= tol &&
-                Mathf.Abs(px[i].b - lb) <= tol) hit++;
+            int r = px[i].r, g = px[i].g, b = px[i].b;
+
+            int max = r > g ? (r > b ? r : b) : (g > b ? g : b);
+            if (max <= vmin) continue;                               // 배경
+
+            int min = r < g ? (r < b ? r : b) : (g < b ? g : b);
+            // 채도 = (max - min) / max. 나눗셈을 피해 양변에 max 를 곱해 비교한다.
+            if (max - min < labelMaxSaturation * max) hit++;
         }
         return (float)hit / px.Length;
     }
