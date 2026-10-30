@@ -187,7 +187,7 @@ MonoBehaviour:
   uvPerMeter: 2.74
   scrollAlongY: 0
   testPrefab: {fileID: 0}
-  autoRelease: 1
+  autoRelease: 0
   holdTime: 2
   showTestButtons: 1
   guiPosition: {x: 260, y: 10}
