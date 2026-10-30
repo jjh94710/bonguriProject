@@ -329,9 +329,8 @@ public class CellController : MonoBehaviour
         Debug.Log($"[Cell] 운전 끝 | {Summary()}", this);
     }
 
-                    ///// : TODO : 
     // 처리 중인 상자 수 (투입했지만 아직 Finish()되지 않은 상자).
-    /// feeder.InProcess를 쓴다. 출구에서 지워진 상자도 빠진다.
+    /// feeder.InProcess를 쓴다. 설계서의 "투입 수 - 처리 수" 대신, 출구에서 지워진 상자도 빠진다.
     int InProcessCount()
     {
         return feeder != null ? feeder.InProcess : 0;

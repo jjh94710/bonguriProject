@@ -6,10 +6,12 @@ using UnityEngine;
 //  BoxFeeder
 //  설정된 간격마다 상자를 만들어 교정 구간 컨베이어 입구에 올리는 투입 스크립트.
 //      - 송장면 방향을 비율대로 정하고(위 70%, 측면 5%씩, 바닥 10%), 송장 번호와 주소 지역을 정답으로 기록한다.
+//      - 송장 글자는 LabelLayout 에셋의 칸 위치대로 찍는다 (판독 스테이션 · 판독 학습과 같은 에셋).
 //      - 벨트 위 대기 상자가 maxQueue에 닿으면 투입을 잠시 멈추고, resumeQueue 이하로 줄면 다시 넣는다.
 //      - noLabelRate · wrongLabelRate만큼 송장 미부착 · 규칙 위반 상자를 일부러 섞는다 (평소 0).
 //
-//  [사용]   빈 오브젝트 "Feeder"에 붙이고 Cell · Line · Box Prefab 칸을 채운다. CellController의 Feeder 칸에 넣는다.
+//  [사용]   빈 오브젝트 "Feeder"에 붙이고 Cell · Line · Box Prefab · Layout 칸을 채운다. CellController의 Feeder 칸에 넣는다.
+//  [!] Box Prefab은 TMP 글자(Number Text · Region Text)가 연결된 공정용 Variant를 넣는다. 비어 있으면 투입하지 않는다.
 //  [호출]   CellController.Run()이 StartFeeding(), 사이클 정지 · 알람이 StopFeeding()을 부른다.
 //  [!] 투입 간격 · 비율 · 대기 한도는 Cell의 Settings(실행 중 복사본)에서 읽는다. Play 전에 CellSettings 에셋에서 바꾼다.
 //
@@ -31,11 +33,11 @@ public class BoxFeeder : MonoBehaviour
     [Tooltip("상자를 올릴 컨베이어 (교정 구간 CorrectLine)")]
     [SerializeField] ConveyorLine line;
 
-    [Tooltip("투입할 상자 Prefab (ParcelBox_ProcessVariant)")]
+    [Tooltip("투입할 상자 Prefab (ParcelBox_6x8x12cm_Process)")]
     [SerializeField] BoxInfo boxPrefab;
 
-                        ///// : TODO :
-    //  [LabelLayout 구현 후] layout (LabelLayout) 칸을 연다. 송장 글자를 칸 위치대로 찍는다.
+    [Tooltip("송장 배치 에셋 (LabelLayout). 송장 번호 · 지역을 칸 위치대로 찍는다")]
+    [SerializeField] LabelLayout layout;
 
     //  ---------------- 투입 지연 ----------------    (FR-01)
     [Header("투입 지연")]
@@ -142,10 +144,9 @@ public class BoxFeeder : MonoBehaviour
         box.labelNumber = number;
         box.labelRegion = region;
 
-        //  송장 미부착 상자는 송장 오브젝트만 끈다 (판독 스테이션에서 NoLabel)
-        if (!hasLabel && box.label != null) { box.label.gameObject.SetActive(false); }
-                            ///// : TODO :
-        //  [LabelLayout 구현 후] if (hasLabel) { layout.Print(box, number, region); }
+        //  송장 글자를 칸 위치대로 찍는다. 송장 미부착 상자는 송장 오브젝트만 끈다 (판독 스테이션에서 NoLabel)
+        if (hasLabel) { layout.Print(box, number, region); }
+        else if (box.label != null) { box.label.gameObject.SetActive(false); }
 
         //  4) 컨베이어 입구에 올린다 (위치 · 물리는 ConveyorLine.Feed()가 맞춘다)
         if (!line.Feed(box))
@@ -249,7 +250,7 @@ public class BoxFeeder : MonoBehaviour
         string item = (serial % 1000).ToString("000");
 
         if (Random.value >= settings.wrongLabelRate)
-            { return ($"{code:00}{item}", RegionName(settings, index), ""); }
+        { return ($"{code:00}{item}", RegionName(settings, index), ""); }
 
         //  지역이 1개뿐이면 주소 불일치를 만들 수 없으므로 앞의 두 종류에서만 고른다
         int kind = Random.Range(0, count > 1 ? 3 : 2);
@@ -290,10 +291,16 @@ public class BoxFeeder : MonoBehaviour
         string missing = cell == null ? "Cell"
                        : line == null ? "Line"
                        : boxPrefab == null ? "Box Prefab"
+                       : layout == null ? "Layout"
                        : null;
         if (missing != null)
         {
             Debug.LogWarning($"[Feeder] {missing} 칸이 비어 있어 투입하지 않습니다.", this);
+            return false;
+        }
+        if (boxPrefab.numberText == null || boxPrefab.regionText == null)
+        {
+            Debug.LogWarning("[Feeder] Box Prefab에 TMP 글자(Number Text · Region Text)가 연결되어 있지 않습니다. 공정용 Variant를 넣으세요.", this);
             return false;
         }
         if (Settings == null || Settings.regionCodes.Length == 0)
@@ -343,8 +350,8 @@ public class BoxFeeder : MonoBehaviour
         for (int i = 0; i < 1000; i++)
         {
             faces[(int)PickFace(settings)]++;
-            if (Random.value < settings.noLabelRate) 
-                { noLabel++; continue; }
+            if (Random.value < settings.noLabelRate)
+            { noLabel++; continue; }
 
             string error = MakeLabel(settings, i + 1).error;
             if (error == "코드 오류") { codeError++; }
@@ -353,9 +360,7 @@ public class BoxFeeder : MonoBehaviour
         }
 
         Debug.Log($"[Feeder] 1000번 | 위 {faces[0]} · 앞 {faces[1]} · 뒤 {faces[2]} · 왼쪽 {faces[3]} · 오른쪽 {faces[4]} · 바닥 {faces[5]} | " +
-                  $"송장 없음 {noLabel} | " +
-                  $"규칙 위반 {codeError + digitError + mismatch} (코드 오류 {codeError} · 자리수 오류 {digitError} · 주소 불일치 {mismatch})", 
-                  this);
+                  $"송장 없음 {noLabel} | 규칙 위반 {codeError + digitError + mismatch} (코드 오류 {codeError} · 자리수 오류 {digitError} · 주소 불일치 {mismatch})", this);
     }
 
     // 테스트 패널 (showTestButtons가 켜져 있을 때만)
