@@ -9,7 +9,7 @@ using UnityEngine;
 //      - 상자가 터미널 컨테이너나 NG 토트에 들어가면 Finish()로 최종 상태를 정하고 집계한다.
 //      - 이상 상황은 RaiseAlarm()로 알리고, 같은 경고가 연속되면 알람으로 멈춘다.
 //
-///// : TODO : 현재는 골격만 세워진 단계
+                    ///// : TODO : 현재는 골격만 세워진 단계
 //  [골격 단계] 설정 복사, 설비 상태, 운전 명령, 제어 방식, 알람, 집계까지 들어 있다.
 //             스테이션 동작과 다른 스크립트 연결은 그 스크립트를 만들 때 하나씩 채운다 ([다음 단계] 표시).
 //  
@@ -20,6 +20,9 @@ using UnityEngine;
 //      * IsRunning 속성을 추가했다. 운전 제어 패널이 버튼을 켜고 끌 때 쓴다.
 //      * ResetAlarm()은 알람만 풀고, 운전은 Run()으로 다시 시작한다. 설계서의 "운전 재개"를 작업자가 시작 버튼을 다시 누르는 것으로 해석했다.
 //      * 분류 성공 · 실패는 송장 정답(labelNumber, labelRegion)으로 찾은 터미널과 실제 목적지를 비교해 센다.
+//      * Run(n)은 feeder.StartFeeding(n)으로 상자를 넣는다 (설계서: FeedOne()을 n번).
+//      * Run(n)이 끝나는 조건에 "다 넣었고 처리 중인 상자 없음"을 더했다. 분류 구간이 없는 테스트 씬에서는 상자가 출구에서 지워져 처리 수가 늘지 않기 때문.
+//      * 처리 중인 상자 수는 feeder.InProcess로 센다 (설계서: 투입 수 - 처리 수).
 //  ============================================================
 public class CellController : MonoBehaviour
 {
@@ -39,9 +42,11 @@ public class CellController : MonoBehaviour
     [Tooltip("판독 스테이션 구간 (정지 위치가 있는 ConveyorLine)")]
     [SerializeField] ConveyorLine readLine;
 
+    [Tooltip("상자 투입 (BoxFeeder)")]
+    [SerializeField] BoxFeeder feeder;
+
                     ///// : TODO : 
     //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
-    //      feeder (BoxFeeder)                       상자 투입
     //      faceRig (FaceCameraRig)                  카메라 5대 송장 위치 측정
     //      correction (CorrectionSequence)          교정 로봇암 동작 (손가락 그리퍼, 물리 파지)
     //      loaders (LoadSequence[3])                터미널 끝 흡착 로봇 (Check()와 알람 정지용)
@@ -93,7 +98,6 @@ public class CellController : MonoBehaviour
     /// 이상 상황 알림 (종류, 상자 ID) --> AlarmUI가 구독
     public event System.Action<string, string> OnAlarm;
 
-    //Coroutine runRoutine;                                   //  지금 돌고 있는 운전 코루틴
     bool stopRequested;                                     //  사이클 정지를 눌렀는지
     bool alarmActive;                                       //  알람으로 멈춘 상태인지 (ResetAlarm()으로 해제)
     string lastAlarmType;                                   //  마지막 경고 종류 (연속 횟수 세기용)
@@ -155,8 +159,7 @@ public class CellController : MonoBehaviour
         if (!IsRunning || stopRequested) { return; }
 
         stopRequested = true;
-                    ///// : TODO : 
-        //  [다음 단계] feeder.StopFeeding();
+        feeder.StopFeeding();
         Debug.Log("[Cell] 사이클 정지 요청 | 처리 중인 상자가 끝나면 멈춤", this);
     }
 
@@ -195,8 +198,9 @@ public class CellController : MonoBehaviour
             alarmActive = true;
             stopRequested = true;
             State = CellState.Stopped;
-            ///// : TODO : 
-            //  [다음 단계] feeder.StopFeeding(); 벨트 · 교정 로봇 · 끝 로봇 3대 정지
+            if (feeder != null) { feeder.StopFeeding(); }       // 운전 전 테스트에서도 불릴 수 있어 빈 칸을 확인한다
+                                ///// : TODO : 
+            //  [다음 단계] 벨트 · 교정 로봇 · 끝 로봇 3대 정지
             Debug.LogError($"[Cell] 알람 정지 | {type} {consecutiveErrors}회 연속", this);
         }
     }
@@ -293,19 +297,31 @@ public class CellController : MonoBehaviour
         State = CellState.Running;
         Debug.Log($"[Cell] 운전 시작 | {(count > 0 ? $"상자 {count}개" : "연속 운전")} | 제어 방식 {Mode}", this);
 
-        ///// : TODO : 
-        //  [다음 단계] count > 0이면 feeder.FeedOne()을 count번, 0이면 feeder.StartFeeding()
+        //  투입을 먼저 시작한다. Feeder의 칸이 비어 시작하지 못하면 운전도 멈춘다
+        feeder.StartFeeding(count);
+        if(!feeder.IsFeeding)
+        {
+            State = CellState.Stopped;
+            IsRunning = false;
+            Debug.LogWarning("[Cell] 투입을 시작하지 못해 운전을 멈춥니다. Feeder 경고를 확인하세요.", this);
+            yield break;
+        }
+
         Coroutine correctLoop = StartCoroutine(CorrectStationLoop());
         Coroutine readLoop = StartCoroutine(ReadStationLoop());
 
         while (!alarmActive)
         {
             if (count > 0 && Processed >= target) { break; }
+            if (count > 0 && !feeder.IsFeeding && InProcessCount() == 0) { break; }
             if (stopRequested && InProcessCount() == 0) { break; }
+
+            State = feeder.IsPaused ? CellState.Waiting : CellState.Running;        // 대기 상자가 많아 투입을 멈추면 대기 (FR-10)
             yield return null;
         }
 
-        //  스테이션 코루틴을 멈춘다. 멈추고 곧바로 다시 Run()을 눌러도 코루틴이 두 벌로 돌지 않게 한다
+        //  투입과 스테이션 코루틴을 멈춘다. 멈추고 곧바로 다시 Run()을 눌러도 코루틴이 두 벌로 돌지 않게 한다
+        feeder.StopFeeding();
         StopCoroutine(correctLoop);
         StopCoroutine(readLoop);
         State = CellState.Stopped;
@@ -313,12 +329,11 @@ public class CellController : MonoBehaviour
         Debug.Log($"[Cell] 운전 끝 | {Summary()}", this);
     }
 
-                    ///// : TODO : 
     // 처리 중인 상자 수 (투입했지만 아직 Finish()되지 않은 상자).
-    /// [BoxFeeder 구현 후] feeder.FedCount - Processed로 바꾼다. 지금은 투입 스크립트가 없어 0.
+    /// feeder.InProcess를 쓴다. 설계서의 "투입 수 - 처리 수" 대신, 출구에서 지워진 상자도 빠진다.
     int InProcessCount()
     {
-        return 0;
+        return feeder != null ? feeder.InProcess : 0;
     }
 
     // 교정 스테이션: 도착 대기 → JudgeAndCorrect() → 판독 구간으로 이송    (FR-03, FR-05, FR-06, FR-16)
@@ -401,6 +416,7 @@ public class CellController : MonoBehaviour
         string missing = settings == null ? "Settings"
                        : correctLine == null ? "Correct Line"
                        : readLine == null ? "Read Line"
+                       : feeder == null ? "Feeder"
                        : null;
         if (missing == null) { return true; }
 
