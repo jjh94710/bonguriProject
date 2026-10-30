@@ -7,7 +7,7 @@ using UnityEngine;
 public static class ParcelPickCheck
 {
     const string Report = "Temp/ParcelPickCheck.json", Key = "Bonguri.PickCheck";
-    static bool fullCycle; static Quaternion turnedRotation; static Vector3 boxStart; static ParcelArmIK arm; static int stage; static float since, boxHeight; static double wall;
+    static bool fullCycle; static Quaternion turnedRotation; static Vector3 boxStart; static CorrectionSequence arm; static int stage; static float since, boxHeight; static double wall;
     static ParcelPickCheck()
     {
         EditorApplication.update += CheckRequest;
@@ -42,7 +42,7 @@ public static class ParcelPickCheck
             if (arm != null) File.WriteAllText("Temp/TurnPlaceProgress.txt", "stage=" + stage + " sim=" + Time.time + " status=" + arm.Status + " boxrot=" + arm.targetBox.transform.eulerAngles + " box=" + arm.targetBox.bounds.center + " tcp=" + arm.tcp.position);
             if (EditorApplication.timeSinceStartup - wall > 420) { Finish(false, "Test timeout"); return; }
             if (stage == 0)
-            { arm = UnityEngine.Object.FindObjectsByType<ParcelArmIK>().First(a => a.name.Contains("first")); arm.sideGrasp = true; boxStart = arm.targetBox.bounds.center; arm.OpenGripper(); arm.ApproachBox(); stage = 1; }
+            { arm = UnityEngine.Object.FindObjectsByType<CorrectionSequence>().First(a => a.name.Contains("first")); arm.sideGrasp = true; boxStart = arm.targetBox.bounds.center; arm.OpenGripper(); arm.ApproachBox(); stage = 1; }
             else if (stage == 1 && !arm.Moving)
             {
                 if (arm.PositionError > .01f) { Finish(false, "Approach: " + arm.Status); return; }

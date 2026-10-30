@@ -14,9 +14,9 @@ Play 후 그리퍼를 열고 **박스 위로 이동 → 잡는 위치로 내려�
 
 ## 구현
 
-- `Scripts/ParcelArmIK.cs`: 6개 회전 관절 수치 IK, 관절 제한, 단계별 경로, 모터 목표값 보간, 타깃 박스 Collider와의 충돌 검사, 초기 관절 각도 및 로봇 자체 중량 보상.
-- `Assets/Editor/ParcelArmIKEditor.cs`: Inspector 조작 버튼과 계산 검증 메뉴.
-- `Assets/Editor/ParcelArmIKPlayTest.cs`: 수동 Play 테스트, 도착 오차·박스 이동·관절 추종·접촉 진단. 결과는 `Temp/ParcelArmIKPlayTest-v3.json`에 기록한다.
+- `Scripts/CorrectionSequence.cs`: 6개 회전 관절 수치 IK, 관절 제한, 단계별 경로, 모터 목표값 보간, 타깃 박스 Collider와의 충돌 검사, 초기 관절 각도 및 로봇 자체 중량 보상.
+- `Assets/Editor/CorrectionSequenceEditor.cs`: Inspector 조작 버튼과 계산 검증 메뉴.
+- `Assets/Editor/CorrectionSequencePlayTest.cs`: 수동 Play 테스트, 도착 오차·박스 이동·관절 추종·접촉 진단. 결과는 `Temp/CorrectionSequencePlayTest-v3.json`에 기록한다.
 - `Assets/Editor/ArrangeParcelIKStation.cs`: 사용자가 메뉴에서 실행할 때 씬을 백업하고 테스트 로봇 배치/초기 자세를 다시 설정한다.
 
 설정 도구는 `Tools > Bonguri`에 있다. 프로젝트를 열거나 컴파일할 때 씬 재배치와 Play 테스트를 자동 실행하지 않는다.

@@ -21,7 +21,7 @@ public static class ArrangeParcelIKStation
             string backup = "Assets/SceneBackups/PickStation/" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "/bongyuri.unity";
             Directory.CreateDirectory(Path.GetDirectoryName(backup));
             if (!EditorSceneManager.SaveScene(scene, backup, true)) throw new Exception("Backup failed");
-            var arm = UnityEngine.Object.FindObjectsByType<ParcelArmIK>().First(a => a.name.Contains("first"));
+            var arm = UnityEngine.Object.FindObjectsByType<CorrectionSequence>().First(a => a.name.Contains("first"));
             var box = arm.targetBox;
             if (box == null) throw new Exception("Target box missing");
             var baseBody = arm.GetComponentsInChildren<ArticulationBody>().First(b => b.isRoot);

@@ -8,7 +8,7 @@ using UnityEngine;
 public static class ParcelSelectedFaceTest
 {
     const string Key = "Bonguri.FaceTest.Active";
-    static ParcelArmIK arm;
+    static CorrectionSequence arm;
     static bool started;
     static double since;
     static double readyAt;
@@ -68,8 +68,8 @@ public static class ParcelSelectedFaceTest
             if (!started)
             {
                 Application.runInBackground = true;
-                arm = UnityEngine.Object.FindObjectsByType<ParcelArmIK>().First(a => a.name.Contains("first"));
-                arm.faceToRaise = (ParcelArmIK.ParcelFace)SessionState.GetInt("Bonguri.FaceTest.Index", 0);
+                arm = UnityEngine.Object.FindObjectsByType<CorrectionSequence>().First(a => a.name.Contains("first"));
+                arm.faceToRaise = (CorrectionSequence.ParcelFace)SessionState.GetInt("Bonguri.FaceTest.Index", 0);
                 arm.RaiseSelectedFaceAndPlace(); started = true;
             }
             float angle = Vector3.Angle(arm.SelectedFaceNormal, Vector3.up);
