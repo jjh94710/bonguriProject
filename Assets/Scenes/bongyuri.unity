@@ -19052,7 +19052,7 @@ MonoBehaviour:
   boxLayerName: ScanTarget
   sampleCount: 100
   randomSeed: 20261030
-  datasetFolder: LabelDataset
+  datasetFolder: LabelDatasetTest
   topRatio: 0.7
   bottomRatio: 0.1
   includeNoLabelSamples: 1
