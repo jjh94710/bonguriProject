@@ -33283,7 +33283,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eb240d2804899b54e8fd107ba71c3650, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CorrectionSequence
-  faceToRaise: 1
+  faceToRaise: 4
   tcp: {fileID: 1822757907}
   targetBox: {fileID: 1999985239}
   gripper: {fileID: 1430163189}
@@ -40998,7 +40998,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eb240d2804899b54e8fd107ba71c3650, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CorrectionSequence
-  faceToRaise: 1
+  faceToRaise: 4
   tcp: {fileID: 589455076}
   targetBox: {fileID: 1999985239}
   gripper: {fileID: 1749693317}
