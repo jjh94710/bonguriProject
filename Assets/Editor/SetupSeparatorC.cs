@@ -23,9 +23,9 @@ using UnityEngine;
  var existing=UnityEngine.Object.FindObjectsByType<Transform>().Where(t=>t.name!="RejectTestParcel"&&t.Find("CardboardBody")!=null&&t.GetComponent<BoxCollider>()!=null&&Mathf.Abs(t.position.x-c.transform.position.x)<.2f&&Mathf.Abs(t.position.z-2.12f)<.25f).FirstOrDefault();
  var parcel=GameObject.Find("RejectTestParcel");if(existing!=null){if(parcel!=null)Undo.DestroyObjectImmediate(parcel);parcel=existing.gameObject;}
  if(parcel==null){var template=GameObject.Find("PusherTestParcel");if(template==null)throw new Exception("Test parcel missing");parcel=UnityEngine.Object.Instantiate(template);parcel.name="RejectTestParcel";Undo.RegisterCreatedObjectUndo(parcel,"Reject test parcel");parcel.transform.position=new Vector3(c.transform.position.x,template.transform.position.y,template.transform.position.z);}
- var bin=GameObject.Find("RejectCollectionBox");if(bin==null){bin=new GameObject("RejectCollectionBox");Undo.RegisterCreatedObjectUndo(bin,"Reject collection box");
+ var bin=GameObject.Find("RejectCollectionBox");if(bin==null){bin=new GameObject("RejectCollectionBox");Undo.RegisterCreatedObjectUndo(bin,"Reject collection box");} if(bin.GetComponentsInChildren<Collider>(true).Length==0){
  Vector3 centre=new Vector3(c.transform.position.x,.15f,1.30f);
- var mat=new Material(Shader.Find("Universal Render Pipeline/Lit"));mat.color=new Color(.22f,.33f,.42f);AssetDatabase.CreateAsset(mat,"Assets/Project/Conveyors/RejectCollectionBox.mat");
+ var mat=AssetDatabase.LoadAssetAtPath<Material>("Assets/Project/Conveyors/RejectCollectionBox.mat");if(mat==null){mat=new Material(Shader.Find("Universal Render Pipeline/Lit"));mat.color=new Color(.22f,.33f,.42f);AssetDatabase.CreateAsset(mat,"Assets/Project/Conveyors/RejectCollectionBox.mat");}
  Part(bin,"Floor",centre,new Vector3(.85f,.04f,.72f),mat);
  Part(bin,"LeftWall",centre+new Vector3(-.425f,.22f,0),new Vector3(.03f,.48f,.75f),mat);
  Part(bin,"RightWall",centre+new Vector3(.425f,.22f,0),new Vector3(.03f,.48f,.75f),mat);
