@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4525868261cecf943b8a9d8946f078d5, type: 3}
+  m_Name: LabelLayout
+  m_EditorClassIdentifier: Assembly-CSharp::LabelLayout
+  font: {fileID: 11400000, guid: 5aa3495d63df168488783aeb69618d27, type: 2}
+  fontSize: 0.005
+  fillRatio: 0.88
+  bold: 1
+  labelSize: {x: 0.036, y: 0.045}
+  digitCells:
+  - serializedVersion: 2
+    x: 0.5275
+    y: 0.775
+    width: 0.075
+    height: 0.11
+  - serializedVersion: 2
+    x: 0.6175
+    y: 0.775
+    width: 0.075
+    height: 0.11
+  - serializedVersion: 2
+    x: 0.7075
+    y: 0.775
+    width: 0.075
+    height: 0.11
+  - serializedVersion: 2
+    x: 0.7975
+    y: 0.775
+    width: 0.075
+    height: 0.11
+  - serializedVersion: 2
+    x: 0.8875
+    y: 0.775
+    width: 0.075
+    height: 0.11
+  regionCell:
+    serializedVersion: 2
+    x: 0.045
+    y: 0.1875
+    width: 0.35
+    height: 0.105
+  barcodeCell:
+    serializedVersion: 2
+    x: 0.03
+    y: 0.77
+    width: 0.42
+    height: 0.12
+  readPixels: 32
+  camMargin: 0.12
+  jitterPos: 0.001
+  jitterAngle: 3
