@@ -113,6 +113,12 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
+# 에디터 도구(Tools > Bonguri)가 씬 · Prefab을 고치기 전에 남기는 백업.
+# 실행할 때마다 씬 복사본(약 2 MB)이 쌓이므로 저장소에는 두지 않는다.
+/[Aa]ssets/SceneBackups/
+/[Aa]ssets/SceneBackups.meta
+/Backups/
+
 # Conveyor Works 데모 씬(FactoryExample) 라이트 베이크 산출물.
 # Unity 가 Generate Lighting 으로 재생성하는 파일이고, LightingData.asset 하나가
 # 138MB 라 GitHub 파일당 100MB 제한에 걸린다. 베이크 결과는 저장소에 두지 않고
