@@ -89,12 +89,24 @@ public class LabelDatasetGenerator : MonoBehaviour
         try
         {
             box = SpawnBox(temps);
-            Renderer labelRenderer = SampleBox.FindLabel(box, labelChildName);
+            GameObject labelObject = SampleBox.FindLabel(box, labelChildName);
 
-            // 송장 오브젝트를 못 찾으면 끌 수가 없다. 그대로 두면 송장이 붙은 상자를
+            // 흔들림이 크면 상자가 프레임 밖으로 잘린 채 찍힌다. 이미지만 보면 멀쩡해
+            // 보이므로 사람이 알아채기 어렵다. 카메라에서 역산한 값으로 묶어둔다.
+            float jitterRange = positionJitter;
+            float safeJitter = SafeJitter();
+            if (jitterRange > safeJitter)
+            {
+                Debug.LogWarning(
+                    $"[LabelDataset] Position Jitter {positionJitter:F3} m 는 화면을 벗어난다. " +
+                    $"{safeJitter:F3} m 로 줄여서 만든다.", this);
+                jitterRange = safeJitter;
+            }
+
+            // 송장을 못 찾으면 끌 수가 없다. 그대로 두면 송장이 붙은 상자를
             // "미부착"으로 적어 라벨이 틀어지므로, 미부착 샘플 자체를 빼고 만든다.
-            bool makeNoLabel = includeNoLabelSamples && labelRenderer != null;
-            if (includeNoLabelSamples && labelRenderer == null)
+            bool makeNoLabel = includeNoLabelSamples && labelObject != null;
+            if (includeNoLabelSamples && labelObject == null)
             {
                 Debug.LogWarning(
                     $"[LabelDataset] 상자에서 송장 오브젝트('{labelChildName}')를 못 찾았다. " +
@@ -104,10 +116,10 @@ public class LabelDatasetGenerator : MonoBehaviour
             for (int s = 0; s < sampleCount; s++)
             {
                 bool noLabel = makeNoLabel && rng.NextDouble() < noLabelRatio;
-                if (labelRenderer != null) labelRenderer.enabled = !noLabel;
+                if (labelObject != null) labelObject.SetActive(!noLabel);
 
                 BoxFace target = noLabel ? BoxFace.None : PickFace(rng);
-                PlaceBox(box.transform, target, rng);
+                PlaceBox(box.transform, target, rng, jitterRange);
 
                 // 실제 자세에서 송장이 어느 면에 있는지 다시 계산한다(배치가 틀려도 정답은 맞게).
                 BoxFace trueFace = noLabel ? BoxFace.None : ActualFace(box.transform);
@@ -164,7 +176,23 @@ public class LabelDatasetGenerator : MonoBehaviour
         return BoxFace.Front;
     }
 
-    void PlaceBox(Transform box, BoxFace target, System.Random rng)
+    /// <summary>상자가 화면 밖으로 나가지 않는 최대 흔들림(m).
+    /// 카메라의 실제 직교 범위에서 역산하므로 Box Size 나 Margin 을 바꿔도 따라온다.</summary>
+    float SafeJitter()
+    {
+        var cams = rig.FaceCameras;
+        if (cams == null || cams.Length == 0 || cams[0] == null) return positionJitter;
+
+        Vector3 b = rig.BoxSize;
+        float maxDim = Mathf.Max(b.x, Mathf.Max(b.y, b.z));
+
+        // 90 도 단위로 돌리므로 화면에서 차지하는 반폭은 가장 긴 변의 절반이고,
+        // 거기에 angleJitter 만큼 비스듬해지는 몫을 더한다.
+        float inPlaneHalf = maxDim * 0.5f * (1f + Mathf.Sin(angleJitter * Mathf.Deg2Rad));
+        return Mathf.Max(0f, cams[0].orthographicSize - inPlaneHalf);
+    }
+
+    void PlaceBox(Transform box, BoxFace target, System.Random rng, float jitterRange)
     {
         Vector3 wanted = (target == BoxFace.None)
             ? FaceCameraRig.OutwardOf(BoxFace.Top)
@@ -182,7 +210,7 @@ public class LabelDatasetGenerator : MonoBehaviour
         Vector3 jitter = new Vector3(
             (float)(rng.NextDouble() * 2.0 - 1.0),
             0f,
-            (float)(rng.NextDouble() * 2.0 - 1.0)) * positionJitter;
+            (float)(rng.NextDouble() * 2.0 - 1.0)) * jitterRange;
         box.position = rig.BoxCenter + jitter;
     }
 

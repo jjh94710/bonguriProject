@@ -43,28 +43,39 @@ public static class SampleBox
         return box;
     }
 
-    /// <summary>송장 오브젝트를 찾는다. 이름이 정확히 맞지 않으면 부분 일치로도 찾아본다.</summary>
-    public static Renderer FindLabel(GameObject box, string childName = "Label")
+    /// <summary>송장 묶음을 찾는다. 이름이 정확히 맞는 자손을 먼저 보고, 없으면
+    /// 이름에 포함된 자손 중 가장 얕은 것을 고른다.
+    /// 송장은 Renderer 가 없는 빈 묶음일 수 있어(조원 Prefab 의 ShippingLabel)
+    /// Renderer 가 아니라 GameObject 를 돌려준다. 끌 때는 SetActive 로 묶음째 끈다.</summary>
+    public static GameObject FindLabel(GameObject box, string childName = "Label")
     {
         if (box == null) return null;
 
-        if (!string.IsNullOrWhiteSpace(childName))
+        string needle = string.IsNullOrWhiteSpace(childName) ? "label" : childName.ToLowerInvariant();
+        GameObject exact = null, loose = null;
+        int exactDepth = int.MaxValue, looseDepth = int.MaxValue;
+
+        foreach (var t in box.GetComponentsInChildren<Transform>(true))
         {
-            var t = box.transform.Find(childName);
-            if (t != null)
+            if (t.gameObject == box) continue;
+
+            int depth = 0;
+            for (Transform p = t.parent; p != null && p != box.transform; p = p.parent) depth++;
+
+            string n = t.name.ToLowerInvariant();
+            if (n == needle)
             {
-                var r = t.GetComponent<Renderer>();
-                if (r != null) return r;
+                if (depth < exactDepth) { exact = t.gameObject; exactDepth = depth; }
+            }
+            else if (n.Contains(needle) && depth < looseDepth)
+            {
+                loose = t.gameObject; looseDepth = depth;
             }
         }
 
-        string needle = string.IsNullOrWhiteSpace(childName) ? "label" : childName.ToLowerInvariant();
-        foreach (var r in box.GetComponentsInChildren<Renderer>(true))
-        {
-            if (r.gameObject == box) continue;
-            if (r.name.ToLowerInvariant().Contains(needle)) return r;
-        }
-        return null;
+        // 얕은 쪽이 묶음이고 깊은 쪽은 그 안의 종이·바코드 막대다.
+        // 'Label' 로 찾아도 LabelBar_0 이 아니라 ShippingLabel 이 잡혀야 한다.
+        return exact != null ? exact : loose;
     }
 
     public static void SetLayerRecursively(GameObject go, int layer)
