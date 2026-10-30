@@ -180,6 +180,7 @@ MonoBehaviour:
   stopperDrop: 0.05
   stopperMoveTime: 0.2
   stopTolerance: 0.05
+  releaseTolerance: 0.05
   lateralRange: 0
   stopErrorX: 0
   stopErrorZ: 0
@@ -786,6 +787,7 @@ MonoBehaviour:
   stopperDrop: 0.05
   stopperMoveTime: 0.2
   stopTolerance: 0.05
+  releaseTolerance: 0.05
   lateralRange: 0
   stopErrorX: 0
   stopErrorZ: 0

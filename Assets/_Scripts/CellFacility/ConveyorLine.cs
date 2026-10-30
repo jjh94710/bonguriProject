@@ -12,6 +12,7 @@ using UnityEngine;
 //  [공정 단계]
 //  투입(CorrectLine entry) --> 교정 스테이션(stopPoint) --> CorrectLine exit = ReadLine entry
 //  --> 판독 스테이션(stopPoint) --> ReadLine exit = 분류 구간 entry
+//  --> 분류 구간(푸셔 NG · A · B · C) --> 터미널 A · B · C 끝(stopPoint) --> 끝 로봇이 컨테이너로
 //
 //  [이송 방식] 가이드처럼 물리를 끈(kinematic) 상자를 스크립트가 물리 스텝마다 옮긴다.
 //             흐름 방향은 입구 → 출구로 계산하므로 벨트가 어느 축을 향해도 된다.
@@ -20,7 +21,7 @@ using UnityEngine;
 //  [!] 벨트는 수평이라고 본다 (상자 높이는 입구에서 정한 그대로 간다).
 //
                     ///// : TODO : 
-//  푸셔(pushers)와 끝 컨테이너(endTote)는 아직 없는 단계
+//  푸셔(pushers)는 아직 없는 단계
 //
 //  [설계서와의 차이]
 //      * 설계서의 - 칸은 [SerializeField]로 두었다.
@@ -58,11 +59,11 @@ public class ConveyorLine : MonoBehaviour
     [SerializeField] CellController cell;
 
                         ///// : TODO : 
-    //  [BoxPusher · ToteBase 구현 후] pushers (BoxPusher[], 진행 순서대로), endTote (ToteBase) 칸을 연다.
+    //  [BoxPusher 구현 후] pushers (BoxPusher[], 진행 순서대로), 칸을 연다.
 
     //  ---------------- 정지 위치 ----------------    (FR-02, FR-16)
     [Header("정지 위치 (선택, 비우면 멈추지 않음)")]
-    [Tooltip("상자 중심이 멈출 위치 (교정 · 판독 스테이션)")]
+    [Tooltip("상자 중심이 멈출 위치 (교정 · 판독 스테이션, 터미널 끝)")]
     [SerializeField] Transform stopPoint;
 
     [Tooltip("(선택) 정지 위치 바로 앞의 스토퍼. 보낼 때 내려갔다가, 상자가 지나가면 올라온다")]
@@ -74,8 +75,11 @@ public class ConveyorLine : MonoBehaviour
     [Tooltip("스토퍼를 올리고 내리는 시간(초) (default: 0.2)")]
     [SerializeField] float stopperMoveTime = 0.2f;
 
-    [Tooltip("정지 오차 허용값 m. 넘으면 경고 로그 (default: 0.05)")]
+    [Tooltip("도착 정지 위치 오차 허용값 m. 넘으면 경고 로그 (default: 0.05)")]
     [SerializeField] float stopTolerance = 0.05f;
+
+    [Tooltip("교정 로봇이 내려놓은 상자의 허용 오차 m. 넘으면 경고 로그 (default: 0.05)")]
+    [SerializeField] float releaseTolerance = 0.05f;
 
     //  ---------------- 무작위 오차 ----------------
     //  학습 범위 안에서만 올린다. 평소 운전은 0으로 둔다.
@@ -237,6 +241,8 @@ public class ConveyorLine : MonoBehaviour
     }
 
     // 정지 위치의 상자를 출구 쪽으로 보낸다.
+    /// 교정 로봇이 손가락으로 잡았다 내려놓은 상자는 조금 비껴 놓이거나 기울 수 있으니, 보내기 전에 확인한다
+    /// 물리를 다시 끄는 시점은 CorrectionSequence가 정하고, 그 결과가 벨트로 보낼 수 있는 상태인지 판단한다
     /// [호출] CellController (스테이션 작업이 끝났을 때), 자동 보내기, 테스트 메뉴
     /// 스토퍼를 내리고, 상자가 스토퍼를 지나가면 CarryRoutine()이 다시 올린다.
     public void Release()
@@ -247,7 +253,23 @@ public class ConveyorLine : MonoBehaviour
             return;
         }
 
-        releasedBox = CurrentBox;
+        BoxInfo box = CurrentBox;
+
+        //  교정 로봇이 물리를 켠 채 두었으면 다시 끈다
+        /// 스크립트로 옮기려면 kinematic이어야 한다
+        Rigidbody body = box.GetComponent<Rigidbody>();
+        if (body != null && !body.isKinematic) { body.isKinematic = true; }
+
+        //  정지 위치에서 releaseTolerance(5cm) 보다 멀거나 기울었으면 교정 실패로 표시한다 (그래도 보내서 NG로 간다)
+        Vector3 error = PositionOf(box) - stopPoint.position;
+        error.y = 0f;
+        if(error.magnitude > releaseTolerance || !IsFlat(box))
+        {
+            box.Mark(ExceptionReason.CorrectionFail);
+            if (cell != null) { cell.RaiseAlarm("교정 실패", box.boxId); }
+        }
+
+        releasedBox = box;
         CurrentBox = null;
         if (stopper != null) { StartCoroutine(MoveStopper(false)); }
     }
@@ -342,8 +364,6 @@ public class ConveyorLine : MonoBehaviour
             }
 
             //  8) 출구 도착: 다음 구간으로 넘긴다. 다음 구간이 없으면 지우고, 입구가 차 있으면 출구에서 기다린다
-                                ///// : TODO : 
-            //  [ToteBase 구현 후] endTote가 있으면 endTote.Add(box) (터미널 벨트 끝의 컨테이너)
             if (distance >= BeltLength - 0.0005f)
             {
                 if (nextLine == null)
@@ -413,6 +433,15 @@ public class ConveyorLine : MonoBehaviour
         return body != null ? body.position : box.transform.position;
     }
 
+    //  상자의 한 면이 바닥을 향해 평평하게 놓였는지 (어느 축이든 위쪽과 10° 안)
+    /// 상자 축 3개 중 위아래를 가장 많이 향한 축의 |y|가 cos(10°) 이상이면 평평하다.
+    static bool IsFlat(BoxInfo box)
+    {
+        Transform boxTransform = box.transform;
+        float best = Mathf.Max(Mathf.Abs(boxTransform.up.y), Mathf.Abs(boxTransform.right.y), Mathf.Abs(boxTransform.forward.y));
+        return best >= Mathf.Cos(10f * Mathf.Deg2Rad);
+    }
+
     // 상자를 move만큼 옮긴다.
     /// kinematic 상자는 MovePosition으로 옮겨야 물리 엔진이 "이동"으로 안다 (위에 놓인 물체도 같이 반응).
     static void MoveBox(BoxInfo box, Vector3 move)
@@ -425,7 +454,8 @@ public class ConveyorLine : MonoBehaviour
     // 상자를 axis 방향으로 쟀을 때 길이의 절반. 상자가 돌아가 있어도 맞게 계산한다.
     /// 각 변의 절반 길이 × 그 변이 axis를 향한 정도(|내적|)를 더한다.
     /// 예) 5 × 6 × 7 cm 상자가 똑바로 서 있으면 위쪽(axis = up)으로 3 cm, 옆으로 눕히면 2.5 cm 또는 3.5 cm.
-    static float HalfSize(BoxInfo box, Vector3 axis)
+    /// [호출] 이 구간, CorrectionSequence · LoadSequence (집기 · 놓기 높이)
+    public static float HalfSize(BoxInfo box, Vector3 axis)
     {
         BoxCollider boxCollider = box.GetComponent<BoxCollider>();
         if (boxCollider == null) { return 0f; }
