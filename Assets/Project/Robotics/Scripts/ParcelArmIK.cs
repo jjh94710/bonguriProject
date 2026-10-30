@@ -21,7 +21,7 @@ public class ParcelArmIK : MonoBehaviour
     [Min(.005f)] public float metresPerSecond = .06f;
     [Tooltip("Compensate the robot links' own weight. Parcel gravity remains active.")]
     public bool compensateRobotGravity = true;
-    [SerializeField, HideInInspector] float[] initialJointAngles;
+    [SerializeField, Tooltip("Start angles in degrees: shoulder, upperarm, forearm, wrist1, wrist2, wrist3")] float[] initialJointAngles;
     [SerializeField] string status = "Play 후 이동 버튼을 누르세요.";
     public string Status => status;
     public bool Moving { get; private set; }
@@ -399,6 +399,14 @@ public sealed class ArmKinematics
                     part.collider, matrix.MultiplyPoint3x4(Vector3.zero), matrix.rotation, out _, out _)) return false;
         }
         return true;
+    }
+    public bool IsElbowRaised(float[] q)
+    {
+        Forward(q, out _, out _);
+        int shoulder = Array.FindIndex(nodes, n => n.joint == 1);
+        int elbow = Array.FindIndex(nodes, n => n.joint == 2);
+        Vector3 segment = world[elbow].MultiplyPoint3x4(Vector3.zero) - world[shoulder].MultiplyPoint3x4(Vector3.zero);
+        return segment.y > .20f && Vector3.Dot(segment.normalized, Vector3.up) > .65f;
     }
     // Separating-axis test of conservative collider bounds; checks every arm link, not only TCP.
     static bool Overlap(Vector3 a, Vector3[] axes, Vector3 ae, Vector3 b, Vector3[] other, Vector3 be)

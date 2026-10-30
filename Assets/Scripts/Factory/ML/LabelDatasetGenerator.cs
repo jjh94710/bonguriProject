@@ -183,12 +183,14 @@ public class LabelDatasetGenerator : MonoBehaviour
                 bool noLabel = makeNoLabel && pick.label != null && rng.NextDouble() < noLabelRatio;
                 if (pick.label != null) pick.label.SetActive(!noLabel);
 
-                BoxFace target = noLabel ? BoxFace.None : PickFace(rng);
+                // 송장을 끈 표본은 어느 쪽으로 세워도 같아 보인다. 위로 세워 자세를 하나로 고정한다.
+                BoxFace target = noLabel ? BoxFace.Top : PickFace(rng);
                 pick.go.SetActive(true);
                 PlaceBox(pick.go.transform, target, rng, jitterRange, pick.entry.Normal);
 
                 // 실제 자세에서 송장이 어느 면에 있는지 다시 계산한다(배치가 틀려도 정답은 맞게).
-                BoxFace trueFace = noLabel ? BoxFace.None : ActualFace(pick.go.transform, pick.entry.Normal);
+                // 송장을 끈 표본은 다섯 면 어디에도 송장이 없다. 카메라가 없는 Bottom 으로 적는다.
+                BoxFace trueFace = noLabel ? BoxFace.Bottom : ActualFace(pick.go.transform, pick.entry.Normal);
 
                 Texture2D[] shots = rig.Capture();
                 for (int i = 0; i < FaceCameraRig.FaceCount; i++)
@@ -276,9 +278,7 @@ public class LabelDatasetGenerator : MonoBehaviour
 
     void PlaceBox(Transform box, BoxFace target, System.Random rng, float jitterRange, Vector3 labelNormal)
     {
-        Vector3 wanted = (target == BoxFace.None)
-            ? FaceCameraRig.OutwardOf(BoxFace.Top)
-            : FaceCameraRig.OutwardOf(target);
+        Vector3 wanted = FaceCameraRig.OutwardOf(target);
 
         Quaternion baseRot = Quaternion.FromToRotation(labelNormal, wanted);
 
@@ -355,7 +355,7 @@ public class LabelDatasetGenerator : MonoBehaviour
         sb.AppendLine("  sample    : 상자 번호 (같은 번호 5 줄 = 한 상자의 5 면)");
         sb.AppendLine("  face      : 찍은 면 (Top/Right/Back/Left/Front)");
         sb.AppendLine("  has_label : 그 면에 송장이 보이면 1 (면별 이진 분류 정답)");
-        sb.AppendLine("  true_face : 그 상자의 실제 송장면 (Bottom, None 포함. 6 분류용 정답)");
+        sb.AppendLine("  true_face : 그 상자의 실제 송장면 (송장을 끈 표본도 Bottom. 6 분류용 정답)");
         sb.AppendLine("  box       : 그 이미지에 쓰인 상자 Prefab 이름");
         return sb.ToString();
     }

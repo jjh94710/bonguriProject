@@ -114,3 +114,4 @@ public static class ParcelArmIKPlayTest
     }
     [Serializable] class Result { public bool passed; public string message, joints, contacts; public int overlappingFrames; public float maxBoxMovement, initialFKError, positionError, angleError, simulationTime; public Vector3 goal, actual; }
 }
+

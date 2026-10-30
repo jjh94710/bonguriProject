@@ -300,10 +300,18 @@ public class FaceCameraRig : MonoBehaviour
         return (float)hit / px.Length;
     }
 
-    /// <summary>색 비율이 가장 높은 면. 어느 면도 기준을 넘지 못하면 None.</summary>
+    /// <summary>
+    /// 색 비율이 가장 높은 면. 어느 면도 기준을 넘지 못하면 Bottom 으로 본다 (SRS FR-03 처리 3).
+    /// 카메라가 5 면만 보므로, 다섯 면에서 송장이 안 보이면 남은 곳은 바닥뿐이다.
+    /// </summary>
     public BoxFace JudgeFace(float[] ratios)
     {
-        if (ratios == null || ratios.Length < FaceCount) return BoxFace.None;
+        if (ratios == null || ratios.Length < FaceCount)
+        {
+            // 측정 자체가 실패한 경우다. 부르는 쪽에서 ExceptionReason.JudgeFail 로 따로 기록한다.
+            Debug.LogWarning("[FaceCameraRig] 비율 배열이 비었다. 바닥으로 판정한다.", this);
+            return BoxFace.Bottom;
+        }
 
         int best = -1;
         float bestValue = 0f;
@@ -311,7 +319,7 @@ public class FaceCameraRig : MonoBehaviour
         {
             if (ratios[i] > bestValue) { bestValue = ratios[i]; best = i; }
         }
-        return (best >= 0 && bestValue >= labelPixelRatio) ? CapturedFaces[best] : BoxFace.None;
+        return (best >= 0 && bestValue >= labelPixelRatio) ? CapturedFaces[best] : BoxFace.Bottom;
     }
 
     void OnDrawGizmosSelected()
