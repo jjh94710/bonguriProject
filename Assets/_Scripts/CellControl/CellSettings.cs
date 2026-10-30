@@ -8,8 +8,8 @@
 //  [만들기] Project 창 우클릭 → Create → Factory → Cell Settings
 //  [사용]   CellController가 시작할 때 복사본(Instantiate)을 만들어 다른 스크립트에 나눠 준다.
 //           그래서 Play 중 운전 제어 패널에서 바꾼 값은 에셋 파일에 남지 않는다.
-//  [팀 확인] 지역 코드 표의 기본값은 SRS 규칙(11·22·33 = 서울·대전·부산)이다.
-//           지금 상자 Prefab의 ShippingLabelNumber는 10·20·30 = 서울특별시·경기도·충청도를 쓴다.
+//  [송장 규칙] 지역 코드 표의 기본값은 SRS 규칙(11·22·33 = 서울·대전·부산)이다.
+//           공정용 Variant는 LabelLayout이 이 표대로 찍는다 (원본 Prefab의 ShippingLabelNumber 10.20.30은 쓰지 않는다).
 //           규칙을 바꾸려면 아래 세 배열만 바꾸면 된다 (NFR-10).
 //  ============================================================
 [CreateAssetMenu(fileName = "CellSettings", menuName = "Factory/Cell Settings")]

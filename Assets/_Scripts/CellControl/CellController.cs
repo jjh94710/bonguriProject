@@ -43,7 +43,8 @@ public class CellController : MonoBehaviour
     //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
     //      feeder (BoxFeeder)                       상자 투입
     //      faceRig (FaceCameraRig)                  카메라 5대 송장 위치 측정
-    //      correction (CorrectionSequence)          교정 로봇암 동작
+    //      correction (CorrectionSequence)          교정 로봇암 동작 (손가락 그리퍼, 물리 파지)
+    //      loaders (LoadSequence[3])                터미널 끝 흡착 로봇 (Check()와 알람 정지용)
     //      correctionAgent (CorrectionAgent)        ML ① 교정 학습 정책
     //      reader (LabelReaderAgent)                ML ② 송장 판독 정책
     //      log (ProductionLog)                      세션 로그
@@ -194,8 +195,8 @@ public class CellController : MonoBehaviour
             alarmActive = true;
             stopRequested = true;
             State = CellState.Stopped;
-                    ///// : TODO : 
-            //  [다음 단계] feeder.StopFeeding(); 벨트 · 로봇 정지
+            ///// : TODO : 
+            //  [다음 단계] feeder.StopFeeding(); 벨트 · 교정 로봇 · 끝 로봇 3대 정지
             Debug.LogError($"[Cell] 알람 정지 | {type} {consecutiveErrors}회 연속", this);
         }
     }
@@ -216,7 +217,7 @@ public class CellController : MonoBehaviour
     //  집계
     //  ============================================================
     // 최종 상태를 정하고 집계 · 로그를 남긴다. 집계는 이 함수에서만 한다.
-    /// [호출] 상자가 터미널 컨테이너나 NG 토트에 들어갈 때 ToteBase.Add()가 부른다.
+    /// [호출] 상자가 터미널 컨테이너나 NG 토트에 들어갈 때 ToteBase.Add()가 부른다 (터미널은 끝 로봇이 내려놓은 뒤).
     /// [!] 같은 상자를 두 번 넘겨도 한 번만 센다 (이미 최종 상태면 무시).
     public void Finish(BoxInfo box)
     {
@@ -355,6 +356,7 @@ public class CellController : MonoBehaviour
     {
                             ///// : TODO :
         //  [Correction ML 준비 완료 후] 아래 자리 표시(작업 시간 1초 흉내)를 지우고 실제 동작으로 바꾼다 
+        /// 상자 물리를 켜고 끄는 일은 CorrectionSequence가 한다 (벨트 위 상자는 kinematic).
         yield return new WaitForSeconds(1f);
     }
 
