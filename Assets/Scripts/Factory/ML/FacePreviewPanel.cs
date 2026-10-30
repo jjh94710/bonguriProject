@@ -6,6 +6,7 @@ using UnityEngine.UI;
 /// 카메라 Culling Mask 가 상자 레이어만 보게 돼 있으므로,
 /// 여기 보이는 그림이 곧 CNN 에 들어가는 입력과 같다.
 /// </summary>
+/// 학습 이미지 촬영화면을 미리보기 위한 스크립트 추후 삭제 예정
 [DisallowMultipleComponent]
 public class FacePreviewPanel : MonoBehaviour
 {
