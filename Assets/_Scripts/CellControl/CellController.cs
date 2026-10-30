@@ -384,7 +384,6 @@ public class CellController : MonoBehaviour
             //  3) 분류 구간으로 보낸다
             box.state = BoxState.Sorting;
             readLine.Release();
-
         }
     }
 

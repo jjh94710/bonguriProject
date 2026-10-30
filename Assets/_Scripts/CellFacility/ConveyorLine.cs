@@ -9,6 +9,10 @@ using UnityEngine;
 //      - 정지 위치가 있으면 그 자리에 상자를 세우고, Release()를 받으면 다시 보낸다.
 //      - 출구에 닿은 상자는 다음 구간(nextLine)으로 넘긴다.
 //
+//  [공정 단계]
+//  투입(CorrectLine entry) --> 교정 스테이션(stopPoint) --> CorrectLine exit = ReadLine entry
+//  --> 판독 스테이션(stopPoint) --> ReadLine exit = 분류 구간 entry
+//
 //  [이송 방식] 가이드처럼 물리를 끈(kinematic) 상자를 스크립트가 물리 스텝마다 옮긴다.
 //             흐름 방향은 입구 → 출구로 계산하므로 벨트가 어느 축을 향해도 된다.
 //  [대기열]   벨트 위 상자는 들어온 순서대로 줄을 서고, 앞 상자와 gap만큼 띄워 멈춘다.
@@ -33,10 +37,10 @@ public class ConveyorLine : MonoBehaviour
     [SerializeField] string lineName = "구간";
 
     [Tooltip("입구. 벨트 윗면 높이, 벨트 폭 가운데에 둔다")]
-    [SerializeField] Transform entry;
+    [SerializeField] Transform entry;                               // (spawnPoint)
 
     [Tooltip("출구. 입구 → 출구 방향이 흐름 방향이다")]
-    [SerializeField] Transform exit;
+    [SerializeField] Transform exit;                                // exit --> (다음 경유점) nextLine.entry
 
     [Tooltip("이송 속도 m/s (default: 0.3)")]
     [SerializeField] float speed = 0.3f;
@@ -53,7 +57,7 @@ public class ConveyorLine : MonoBehaviour
     [Tooltip("(선택) 이송 실패를 알릴 CellController. 비우면 Console 경고만 남긴다")]
     [SerializeField] CellController cell;
 
-    ///// : TODO : 
+                        ///// : TODO : 
     //  [BoxPusher · ToteBase 구현 후] pushers (BoxPusher[], 진행 순서대로), endTote (ToteBase) 칸을 연다.
 
     //  ---------------- 정지 위치 ----------------    (FR-02, FR-16)
@@ -140,7 +144,7 @@ public class ConveyorLine : MonoBehaviour
             BoxInfo last = boxes[boxes.Count - 1];
             if (last == null) { return true; }
 
-            return Along(PositionOf(last)) - HalfSize(last, Flow) * 2f >= gap;
+            return AlongBelt(PositionOf(last)) - HalfSize(last, Flow) * 2f >= gap;
         }
     }
 
@@ -170,7 +174,7 @@ public class ConveyorLine : MonoBehaviour
     }
 
     /// 입구에서 출구까지 흐름 방향 거리 m
-    float Length => Along(exit.position);
+    float BeltLength => AlongBelt(exit.position);
 
 
     //  ============================================================
@@ -180,18 +184,13 @@ public class ConveyorLine : MonoBehaviour
     void Start()
     {
         if (entry == null || exit == null)
-        {
-            Debug.LogWarning($"[Conveyor] {lineName}: Entry / Exit가 비어 있습니다.", this);
-        }
+            { Debug.LogWarning($"[Conveyor] {lineName}: Entry / Exit가 비어 있습니다.", this); }
+        
         if (stopper != null) { stopperUpPosition = stopper.position; }
 
         if (beltRenderers != null)
-        {
             foreach (Renderer beltRenderer in beltRenderers)
-            {
                 if (beltRenderer != null) { beltMaterials.Add(beltRenderer.material); }    //  .material = 이 렌더러 전용 복사본
-            }
-        }
     }
 
     // 자동 보내기 (테스트용). 정지한 지 holdTime이 지났고 다음 구간이 받을 수 있으면 보낸다.
@@ -278,7 +277,7 @@ public class ConveyorLine : MonoBehaviour
     /// distance = 입구에서 흐름 방향으로 온 거리 m
     IEnumerator CarryRoutine(BoxInfo box)
     {
-        float stopAt = stopPoint != null ? Along(stopPoint.position) + Random.Range(-stopErrorX, stopErrorX) : 0f;
+        float stopAt = stopPoint != null ? AlongBelt(stopPoint.position) + Random.Range(-stopErrorX, stopErrorX) : 0f;
         bool passedStop = stopPoint == null;        //  정지 위치가 없으면 처음부터 "지난 것"으로 본다
 
         while (true)
@@ -301,18 +300,18 @@ public class ConveyorLine : MonoBehaviour
             if (CheckOffBelt(box)) { yield break; }
 
             //  4) 이번 스텝에 갈 수 있는 곳 = 출구, 정지 위치, 앞 상자 뒤 중 가장 가까운 곳
-            float distance = Along(PositionOf(box));
-            float limit = Length;
+            float distance = AlongBelt(PositionOf(box));
+            float limit = BeltLength;
             if (!passedStop) { limit = Mathf.Min(limit, stopAt); }
 
             int index = boxes.IndexOf(box);
             if (index > 0 && boxes[index - 1] != null)
             {
                 BoxInfo ahead = boxes[index - 1];
-                limit = Mathf.Min(limit, Along(PositionOf(ahead)) - HalfSize(ahead, Flow) - HalfSize(box, Flow) - gap);
+                limit = Mathf.Min(limit, AlongBelt(PositionOf(ahead)) - HalfSize(ahead, Flow) - HalfSize(box, Flow) - gap);
             }
 
-            ///// : TODO : 
+                                ///// : TODO : 
             //  [BoxPusher 구현 후] 분기 지점에 온 상자는 pusher.TryPush(this, box). 밀면 Take()로 빠지므로 여기서 끝난다.
 
             //  5) 일정한 속도로 한 칸 옮긴다 (뒤로는 가지 않는다)
@@ -334,7 +333,7 @@ public class ConveyorLine : MonoBehaviour
             //  7) 보낸 상자의 뒷면이 스토퍼를 1 cm 넘게 지나면 스토퍼를 다시 올린다
             if (box == releasedBox)
             {
-                float stopperAt = stopper != null ? Along(stopper.position) : stopAt;
+                float stopperAt = stopper != null ? AlongBelt(stopper.position) : stopAt;
                 if (distance - HalfSize(box, Flow) > stopperAt + 0.01f)
                 {
                     releasedBox = null;
@@ -343,9 +342,9 @@ public class ConveyorLine : MonoBehaviour
             }
 
             //  8) 출구 도착: 다음 구간으로 넘긴다. 다음 구간이 없으면 지우고, 입구가 차 있으면 출구에서 기다린다
-            ///// : TODO : 
+                                ///// : TODO : 
             //  [ToteBase 구현 후] endTote가 있으면 endTote.Add(box) (터미널 벨트 끝의 컨테이너)
-            if (distance >= Length - 0.0005f)
+            if (distance >= BeltLength - 0.0005f)
             {
                 if (nextLine == null)
                 {
@@ -375,13 +374,9 @@ public class ConveyorLine : MonoBehaviour
         LastStopError = error.magnitude;
 
         if (LastStopError > stopTolerance)
-        {
-            Debug.LogWarning($"[Conveyor] {lineName}: {box.boxId} 정지 오차 {LastStopError * 1000f:F0} mm (허용 {stopTolerance * 1000f:F0} mm 초과)", this);
-        }
+            { Debug.LogWarning($"[Conveyor] {lineName}: {box.boxId} 정지 오차 {LastStopError * 1000f:F0}mm (허용 {stopTolerance * 1000f:F0}mm 초과)", this); }
         else
-        {
-            Debug.Log($"[Conveyor] {lineName}: {box.boxId} 정지 위치 도착 (오차 {LastStopError * 1000f:F1} mm)", this);
-        }
+            { Debug.Log($"[Conveyor] {lineName}: {box.boxId} 정지 위치 도착 (오차 {LastStopError * 1000f:F1} mm)", this); }
     }
 
     // 상자가 벨트 밖으로 벗어났는지 확인하고, 벗어났으면 이송 실패로 처리한다.
@@ -409,7 +404,7 @@ public class ConveyorLine : MonoBehaviour
     //  계산 · 이동 도우미
     //  ============================================================
     // 위치 → 입구에서 흐름 방향으로 잰 거리 m
-    float Along(Vector3 position) => Vector3.Dot(position - entry.position, Flow);
+    float AlongBelt(Vector3 position) => Vector3.Dot(position - entry.position, Flow);
 
     // 상자의 지금 위치. Rigidbody가 있으면 물리 엔진의 위치를 쓴다 (MovePosition과 같은 값).
     static Vector3 PositionOf(BoxInfo box)
@@ -461,7 +456,7 @@ public class ConveyorLine : MonoBehaviour
         stopperMoving = false;
     }
 
-    // 벨트 무늬를 이동 거리만큼 흘린다 (가이드와 같은 방식).
+    // 벨트 무늬를 이동 거리만큼 흘린다.
     /// 이동 거리 m × 1 m당 텍스처 변화량만큼 텍스처를 민다. Repeat으로 0 ~ 1을 반복한다.
     void ScrollBelt(float distance)
     {
@@ -470,10 +465,7 @@ public class ConveyorLine : MonoBehaviour
 
         beltOffset = Mathf.Repeat(beltOffset + distance * uvPerMeter, 1f);
         Vector2 offset = scrollAlongY ? new Vector2(0f, beltOffset) : new Vector2(beltOffset, 0f);
-        foreach (Material material in beltMaterials)
-        {
-            material.mainTextureOffset = offset;
-        }
+        foreach (Material material in beltMaterials) { material.mainTextureOffset = offset; }
     }
 
 
