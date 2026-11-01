@@ -6,7 +6,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 [InitializeOnLoad] public static class SetupSeparatorC {
  static double ready;
- static SetupSeparatorC(){ready=EditorApplication.timeSinceStartup+3;EditorApplication.update+=Poll;EditorApplication.playModeStateChanged+=s=>{if(s==PlayModeStateChange.EnteredPlayMode&&SessionState.GetBool("C.RejectTest",false)){started=false;wall=EditorApplication.timeSinceStartup;EditorApplication.update+=Tick;}};}
+ static SetupSeparatorC(){if(!EditorApplication.isPlayingOrWillChangePlaymode)SessionState.SetBool("C.RejectTest",false);ready=EditorApplication.timeSinceStartup+3;EditorApplication.update+=Poll;EditorApplication.playModeStateChanged+=s=>{if(s==PlayModeStateChange.EnteredPlayMode&&SessionState.GetBool("C.RejectTest",false)){started=false;wall=EditorApplication.timeSinceStartup;EditorApplication.update+=Tick;}};}
  static bool started;static BoxPusher push;static double wall;static Vector3 home;
  static void Poll(){
  if(EditorApplication.isCompiling||EditorApplication.isUpdating||EditorApplication.isPlayingOrWillChangePlaymode||EditorApplication.timeSinceStartup<ready)return;

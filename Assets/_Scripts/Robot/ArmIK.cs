@@ -46,15 +46,24 @@ public sealed class ArmIK : MonoBehaviour
                  component.GetType().FullName == "Unity.Robotics.UrdfImporter.Control.JointControl" || component.GetType().FullName == "JointControl"))
             { suspended.Add(component); component.enabled = false; }
         bodies = GetComponentsInChildren<ArticulationBody>();
-        if (initialJointAngles != null && initialJointAngles.Length == 6 && tcp != null)
+        if (tcp != null)
         {
             var initialModel = new ArmKinematics(transform, tcp);
+            bool hasSavedPose = initialJointAngles != null && initialJointAngles.Length == 6;
             for (int i = 0; i < 6; i++)
             {
                 var joint = initialModel.Joints[i];
-                joint.jointPosition = new ArticulationReducedSpace(initialJointAngles[i] * Mathf.Deg2Rad);
-                joint.jointVelocity = new ArticulationReducedSpace(0);
-                var drive = joint.xDrive; drive.target = initialJointAngles[i]; joint.xDrive = drive;
+                // Do not overwrite articulation reduced-space state during Awake.
+                // Unity 6 can corrupt the native PhysX articulation descriptor when
+                // several trees are rewritten before their first simulation step.
+                // If the scene has no saved ready pose, hold the pose authored in the
+                // scene instead of letting the prefab's zero-degree drives fold the arm.
+                float currentDegrees = joint.jointPosition.dofCount > 0
+                    ? joint.jointPosition[0] * Mathf.Rad2Deg
+                    : joint.xDrive.target;
+                var drive = joint.xDrive;
+                drive.target = hasSavedPose ? initialJointAngles[i] : currentDegrees;
+                joint.xDrive = drive;
             }
         }
     }
@@ -70,7 +79,8 @@ public sealed class ArmIK : MonoBehaviour
         if (!Application.isPlaying || Moving) return false;
         model = new ArmKinematics(transform, tcp); var current = model.CurrentAngles();
         route.Clear(); targetBox = obstacle; protectBox = obstacle != null;
-        if (!model.Solve(position, rotation, current, out var answer, out _, out _, 3f)
+        if (!model.Solve(position, rotation, current, out var answer, out _, out _, 3f,
+                acceptable: null, allowedPosition: positionTolerance)
             || !AppendJointEdge(current, answer, protectBox))
         { route.Clear(); status = "관절 경로를 찾지 못했습니다. " + pathFailure; return false; }
         BeginRoute(position, rotation); return true;
@@ -99,7 +109,8 @@ public sealed class ArmIK : MonoBehaviour
         {
             float t = (float)n / steps;
             if (!model.Solve(Vector3.Lerp(startPosition, endPosition, t), Quaternion.Slerp(startRotation, endRotation, t), seed,
-                out var next, out float error, out float angle, 5f)) { pathFailure = $"중간 자세 IK 오차 {error * 1000:F1}mm / {angle:F1}도"; return false; }
+                out var next, out float error, out float angle, 5f,
+                acceptable: null, allowedPosition: positionTolerance)) { pathFailure = $"중간 자세 IK 오차 {error * 1000:F1}mm / {angle:F1}도"; return false; }
             float largest = 0; for (int j = 0; j < 6; j++) largest = Mathf.Max(largest, Mathf.Abs(next[j] - seed[j]));
             // A discontinuous IK branch is never an acceptable Cartesian segment.
             if (largest > 28) { pathFailure = "중간 자세에서 관절이 크게 꺾입니다."; return false; }

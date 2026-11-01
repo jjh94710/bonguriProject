@@ -58,6 +58,11 @@ public class CorrectionSequence : MonoBehaviour
     void Hold() => Motion.Hold();
     public bool MoveTo(Vector3 position, Quaternion rotation) => Motion.MoveTo(position, rotation);
     Coroutine parcelTurn;
+    Rigidbody heldParcelBody;
+    bool heldWasKinematic, heldUsedGravity;
+    Vector3 heldPositionOffset;
+    Quaternion heldRotationOffset;
+    readonly List<(Collider robot, Collider parcel)> ignoredGripContacts = new List<(Collider, Collider)>();
     public string CycleStep { get; private set; }
     public int CurrentRotationStage { get; private set; }
     public int CompletedQuarterTurns { get; private set; }
@@ -124,12 +129,16 @@ public class CorrectionSequence : MonoBehaviour
             CycleStep = "잡기 위치"; DescendToBox();
             while (Moving && !cancellingTurn) yield return null;
             if (cancellingTurn || PositionError > positionTolerance || !status.StartsWith("목표 도착")) break;
-            if (Mathf.Abs(Vector3.Dot(JawClosingDirection(), Vector3.up)) > .08f || JawHeightDifference() > .008f)
-            { status = "집기 중단 · 두 손가락의 높이가 맞지 않습니다."; break; }
-            float start = Time.time, gripTarget = parcelGripCloseAmount;
+            float jawTiltLimit = Mathf.Sin(Mathf.Clamp(angleTolerance + 1.5f, 2f, 8f) * Mathf.Deg2Rad);
+            float fingerHeightDifference = JawHeightDifference();
+            float fingerHeightTolerance = FingerLevelTolerance();
+            if (Mathf.Abs(Vector3.Dot(JawClosingDirection(), Vector3.up)) > jawTiltLimit || fingerHeightDifference > fingerHeightTolerance)
+            { status = $"집기 중단 · 손가락 높이 차이 {fingerHeightDifference * 1000:F1}mm (허용 {fingerHeightTolerance * 1000:F1}mm)"; break; }
+            float start = Time.time, gripTarget = GripCloseForBox();
             while (Time.time - start < 3f && !cancellingTurn)
             { gripper.closeAmount = Mathf.Lerp(0, gripTarget, (Time.time - start) / 3f); yield return null; }
             yield return new WaitForSeconds(.8f);
+            if (!AttachHeldParcel()) break;
             float bottom = targetBox.bounds.min.y;
             CycleStep = "들어 올리기"; Lift(); while (Moving && !cancellingTurn) yield return null;
             if (cancellingTurn || targetBox.bounds.min.y - bottom < .03f) { status = "선택 면 교정 중단 · 박스를 들어 올리지 못했습니다."; break; }
@@ -194,6 +203,7 @@ public class CorrectionSequence : MonoBehaviour
     void OnDisable()
     {
         StopAllCoroutines(); faceCycle = null; parcelTurn = null; runningSelectedCycle = false; cancellingTurn = true;
+        DetachHeldParcel(true);
         if (Application.isPlaying && model != null) Hold();
         if (armIK != null) { armIK.RestoreControllers(); armIK.StatusChanged -= OnMotionStatus; }
     }
@@ -239,7 +249,8 @@ public class CorrectionSequence : MonoBehaviour
                     AppendCartesian(ref seed, aboveBox, desired, true) &&
                     AppendCartesian(ref seed, position, desired, true)) { found = true; break; }
             }
-            if (!found && model.Solve(position, desired, current, out var direct, out _, out _, 5f, q => model.IsBoxClear(q, targetBox, boxClearance)))
+            if (!found && model.Solve(position, desired, current, out var direct, out _, out _, 5f,
+                    q => model.IsBoxClear(q, targetBox, boxClearance), positionTolerance))
             {
                 // A shorter joint path is allowed only when every sampled arm pose clears the parcel.
                 route.Clear(); found = AppendJointEdge(current, direct, true);
@@ -279,19 +290,31 @@ public class CorrectionSequence : MonoBehaviour
     }
     public float JawHeightDifference()
     {
+        if (!TryGetFingerCentres(out var centres)) return float.PositiveInfinity;
+        return Mathf.Abs(centres[0].y - centres[1].y);
+    }
+    float FingerLevelTolerance()
+    {
+        if (!TryGetFingerCentres(out var centres)) return .008f;
+        float span = Vector3.Distance(centres[0], centres[1]);
+        float tilt = Mathf.Clamp(angleTolerance + 1.5f, 2f, 8f) * Mathf.Deg2Rad;
+        return Mathf.Max(.008f, span * Mathf.Sin(tilt) + .002f);
+    }
+    bool TryGetFingerCentres(out Vector3[] centres)
+    {
+        centres = new Vector3[2];
         var fingers = GetComponentsInChildren<ArticulationBody>(true)
             .Where(t => t.name == "finger_left_link" || t.name == "finger_right_link").ToArray();
-        if (fingers.Length != 2) return float.PositiveInfinity;
-        Vector3[] centres = new Vector3[2];
+        if (fingers.Length != 2) return false;
         for (int i = 0; i < 2; i++)
         {
             var colliders = fingers[i].GetComponentsInChildren<Collider>().Where(c => c.enabled && !c.isTrigger).ToArray();
-            if (colliders.Length == 0) return float.PositiveInfinity;
+            if (colliders.Length == 0) return false;
             var bounds = colliders[0].bounds;
             foreach (var c in colliders.Skip(1)) bounds.Encapsulate(c.bounds);
             centres[i] = bounds.center;
         }
-        return Mathf.Abs(centres[0].y - centres[1].y);
+        return true;
     }
     public bool GetBoxGoal(float height, out Vector3 position, out Quaternion desired)
     {
@@ -474,6 +497,7 @@ public class CorrectionSequence : MonoBehaviour
         float initialClose = gripper.closeAmount, start = Time.time;
         CycleStep = "벨트 위 손가락 열기";
         status = "박스 자세를 유지하며 벨트 위에서 손가락을 여는 중";
+        DetachHeldParcel(false);
         while (Time.time - start < .8f && !cancellingTurn)
         { gripper.closeAmount = Mathf.Lerp(initialClose, 0, (Time.time - start) / .8f); yield return null; }
         if (cancellingTurn) { parcelTurn = null; yield break; }
@@ -491,6 +515,7 @@ public class CorrectionSequence : MonoBehaviour
         model.Forward(beforeLowering, out var retreatPosition, out var retreatRotation);
         BeginRoute(retreatPosition, retreatRotation);
         while (Moving && !cancellingTurn) yield return null;
+        RestoreGripContacts();
         if (!cancellingTurn)
             status = (faceSelectionBound
                 ? (Vector3.Dot(selectedStageTurn * Vector3.up, Vector3.up) > .99f
@@ -500,7 +525,63 @@ public class CorrectionSequence : MonoBehaviour
                 ? "벨트 놓기 완료 · 세운 박스 자세 유지 확인" : "박스는 놓았으나 자세가 기울었습니다. 놓는 위치와 접촉면을 확인하세요.";
         parcelTurn = null;
     }
-    public void OpenGripper() { if (gripper != null) gripper.Open(); }
+    bool AttachHeldParcel()
+    {
+        if (heldParcelBody != null) return true;
+        if (targetBox == null || targetBox.attachedRigidbody == null || targetBox.attachedRigidbody.isKinematic)
+        { status = "집기 실패 · 박스에 동적 Rigidbody가 필요합니다."; return false; }
+        if (Vector3.Distance(tcp.position, targetBox.bounds.center) > targetBox.bounds.extents.magnitude + .04f)
+        { status = "집기 실패 · 그리퍼가 박스 중심에서 너무 멉니다."; return false; }
+
+        heldParcelBody = targetBox.attachedRigidbody;
+        heldWasKinematic = heldParcelBody.isKinematic;
+        heldUsedGravity = heldParcelBody.useGravity;
+        heldPositionOffset = tcp.InverseTransformPoint(heldParcelBody.position);
+        heldRotationOffset = Quaternion.Inverse(tcp.rotation) * heldParcelBody.rotation;
+        foreach (var robotCollider in GetComponentsInChildren<Collider>(true))
+            foreach (var parcelCollider in heldParcelBody.GetComponentsInChildren<Collider>(true))
+                if (!Physics.GetIgnoreCollision(robotCollider, parcelCollider))
+                {
+                    Physics.IgnoreCollision(robotCollider, parcelCollider, true);
+                    ignoredGripContacts.Add((robotCollider, parcelCollider));
+                }
+        heldParcelBody.linearVelocity = Vector3.zero;
+        heldParcelBody.angularVelocity = Vector3.zero;
+        heldParcelBody.useGravity = false;
+        heldParcelBody.isKinematic = true;
+        status = "그리퍼 고정 완료 · 들어 올리는 중";
+        return true;
+    }
+    void FixedUpdate()
+    {
+        if (heldParcelBody == null || tcp == null) return;
+        heldParcelBody.MovePosition(tcp.TransformPoint(heldPositionOffset));
+        heldParcelBody.MoveRotation(tcp.rotation * heldRotationOffset);
+    }
+    void DetachHeldParcel(bool restoreContacts)
+    {
+        var body = heldParcelBody;
+        heldParcelBody = null;
+        if (body != null)
+        {
+            body.isKinematic = heldWasKinematic;
+            body.useGravity = heldUsedGravity;
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+        }
+        if (restoreContacts) RestoreGripContacts();
+    }
+    void RestoreGripContacts()
+    {
+        foreach (var pair in ignoredGripContacts)
+            if (pair.robot != null && pair.parcel != null) Physics.IgnoreCollision(pair.robot, pair.parcel, false);
+        ignoredGripContacts.Clear();
+    }
+    public void OpenGripper()
+    {
+        DetachHeldParcel(true);
+        if (gripper != null) gripper.Open();
+    }
     public float GripCloseForBox()
     {
         if (targetBox == null) return parcelGripCloseAmount;
@@ -511,7 +592,7 @@ public class CorrectionSequence : MonoBehaviour
             + Mathf.Abs(Vector3.Dot(targetBox.transform.TransformVector(Vector3.forward * targetBox.size.z), closing));
         return Mathf.Clamp(parcelGripCloseAmount + (.06f - width) * .5f, .003f, .04f);
     }
-    public void CloseGripper() { if (gripper != null) gripper.closeAmount = parcelGripCloseAmount; }
+    public void CloseGripper() { if (gripper != null) gripper.closeAmount = GripCloseForBox(); }
 
 
 

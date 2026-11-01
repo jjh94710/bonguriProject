@@ -10,6 +10,7 @@ public static class ParcelPickCheck
     static CorrectionSequence arm; static int stage; static float since, boxHeight; static double wall;
     static ParcelPickCheck()
     {
+        if (!EditorApplication.isPlayingOrWillChangePlaymode) SessionState.SetBool(Key, false);
         EditorApplication.playModeStateChanged += s => {
             if (s == PlayModeStateChange.EnteredPlayMode && SessionState.GetBool(Key, false))
             { stage = 0; wall = EditorApplication.timeSinceStartup; EditorApplication.update += Tick; }

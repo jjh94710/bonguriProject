@@ -11,7 +11,7 @@ using UnityEngine;
 }
 [InitializeOnLoad] public static class SuctionLoadingSetup {
  static double ready,wall;static BoxAttacher loader;static int last;static bool requested;static Vector3 source;static float nextAt;
- static SuctionLoadingSetup(){ready=EditorApplication.timeSinceStartup+4;EditorApplication.update+=Poll;EditorApplication.playModeStateChanged+=s=>{if(s==PlayModeStateChange.EnteredPlayMode&&SessionState.GetBool("Suction.LoadTest",false)){loader=null;last=0;requested=false;wall=EditorApplication.timeSinceStartup;nextAt=0;EditorApplication.update+=Tick;}};}
+ static SuctionLoadingSetup(){if(!EditorApplication.isPlayingOrWillChangePlaymode)SessionState.SetBool("Suction.LoadTest",false);ready=EditorApplication.timeSinceStartup+4;EditorApplication.update+=Poll;EditorApplication.playModeStateChanged+=s=>{if(s==PlayModeStateChange.EnteredPlayMode&&SessionState.GetBool("Suction.LoadTest",false)){loader=null;last=0;requested=false;wall=EditorApplication.timeSinceStartup;nextAt=0;EditorApplication.update+=Tick;}};}
  static void Poll(){if(EditorApplication.isPlayingOrWillChangePlaymode||EditorApplication.isCompiling||EditorApplication.isUpdating||EditorApplication.timeSinceStartup<ready)return;
  if(File.Exists("Temp/SetupSuctionLoading.request")){File.Delete("Temp/SetupSuctionLoading.request");Setup();}
  if(File.Exists("Temp/TestSuctionLoading.request")){File.Delete("Temp/TestSuctionLoading.request");SessionState.SetBool("Suction.LoadTest",true);EditorApplication.isPlaying=true;}}

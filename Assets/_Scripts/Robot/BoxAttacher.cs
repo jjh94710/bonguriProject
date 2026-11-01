@@ -19,13 +19,16 @@ public sealed class BoxAttacher : MonoBehaviour
     public bool Busy => routine != null;
     public int LoadedCount => placed.Count(b => b != null);
     public Vector3 PickupPosition => pickupCentre;
-    public bool Attached => joint != null;
+    public bool Attached => heldBody != null;
     public IReadOnlyList<BoxCollider> PlacedBoxes => placed;
     readonly List<BoxCollider> placed = new List<BoxCollider>();
     readonly List<(Collider robot, Collider parcel)> ignored = new List<(Collider, Collider)>();
     Coroutine routine;
-    FixedJoint joint;
     BoxCollider held;
+    Rigidbody heldBody;
+    bool heldWasKinematic, heldUsedGravity;
+    Vector3 heldLocalPosition;
+    Quaternion heldLocalRotation;
     Vector3 pickupCentre;
     float[] pickupAngles, contactAngles;
     Vector3 contactPoint;
@@ -39,8 +42,8 @@ public sealed class BoxAttacher : MonoBehaviour
             if(!Physics.GetIgnoreCollision(colliders[i],colliders[j])) { Physics.IgnoreCollision(colliders[i],colliders[j],true);selfPairs.Add((colliders[i],colliders[j])); }
         foreach(var body in GetComponentsInChildren<ArticulationBody>()){body.solverIterations=60;body.solverVelocityIterations=20;body.maxJointVelocity=4f;}
         if (tcp != null) { Configure(); armIK.Initialize(readyAngles); }
-        var root=GetComponentsInChildren<ArticulationBody>().First(b=>b.isRoot);
-        if(readyAngles!=null&&readyAngles.Length==6){root.SetJointPositions(readyAngles.Select(v=>v*Mathf.Deg2Rad).ToList());root.SetJointVelocities(Enumerable.Repeat(0f,6).ToList());}
+        // Drive targets are configured by ArmIK.Initialize. Directly replacing the
+        // root reduced-space arrays here can crash the Unity 6 PhysX solver.
     }
     IEnumerator Start()
     {
@@ -64,15 +67,41 @@ public sealed class BoxAttacher : MonoBehaviour
         held = box;
         foreach (var a in GetComponentsInChildren<Collider>()) foreach (var b in box.attachedRigidbody.GetComponentsInChildren<Collider>())
             if (!Physics.GetIgnoreCollision(a,b)) { Physics.IgnoreCollision(a,b,true); ignored.Add((a,b)); }
-        var body = box.attachedRigidbody; body.solverIterations = 20; body.solverVelocityIterations = 10;
-        joint = body.gameObject.AddComponent<FixedJoint>();
-        joint.connectedArticulationBody = suctionCup.GetComponentInParent<ArticulationBody>();
-        joint.breakForce = Mathf.Infinity; joint.breakTorque = Mathf.Infinity;
-        joint.enableCollision = false;
+        var body = box.attachedRigidbody;
+        body.solverIterations = 20; body.solverVelocityIterations = 10;
+        heldBody = body;
+        heldWasKinematic = body.isKinematic;
+        heldUsedGravity = body.useGravity;
+        heldLocalPosition = tcp.InverseTransformPoint(body.position);
+        heldLocalRotation = Quaternion.Inverse(tcp.rotation) * body.rotation;
+        body.linearVelocity = Vector3.zero;
+        body.angularVelocity = Vector3.zero;
+        body.useGravity = false;
+        body.isKinematic = true;
         Status = "흡착 고정됨"; return true;
     }
     public void Detach()
-    { if (joint != null) { Destroy(joint); joint = null; } held = null; }
+    {
+        if (heldBody != null)
+        {
+            var body = heldBody;
+            heldBody = null;
+            body.isKinematic = heldWasKinematic;
+            body.useGravity = heldUsedGravity;
+            if (!body.isKinematic)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+        }
+        held = null;
+    }
+    void FixedUpdate()
+    {
+        if (heldBody == null || tcp == null) return;
+        heldBody.MovePosition(tcp.TransformPoint(heldLocalPosition));
+        heldBody.MoveRotation(tcp.rotation * heldLocalRotation);
+    }
     void RestoreContacts()
     { foreach (var pair in ignored) if(pair.robot != null && pair.parcel != null) Physics.IgnoreCollision(pair.robot,pair.parcel,false); ignored.Clear(); }
     public void LoadNextBox()
