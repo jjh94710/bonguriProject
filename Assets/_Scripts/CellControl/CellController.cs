@@ -737,4 +737,4 @@ public class CellController : MonoBehaviour
     {
         if (Playing()) { SetMode(ControlMode.Policy); }
     }
-}
+}
