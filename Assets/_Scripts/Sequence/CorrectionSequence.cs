@@ -66,9 +66,7 @@ public class CorrectionSequence : MonoBehaviour
     [Tooltip("내려놓을 벨트 면 (교정 구간 벨트의 Collider). 비우면 이름에 Conveyor가 들어간 오브젝트를 찾는다")]
     public Collider placementSurface;
 
-                        /////   : TODO :
-    /// ArmIK -> FrontArmIK & BackArmIK 클래스 분리된 점 반영
-    [Tooltip("같은 오브젝트의 ArmIK. 비우면 찾는다")]
+    [Tooltip("같은 오브젝트의 ArmIK (FrontArmIK · BackArmIK도 된다). 비우면 찾는다")]
     [SerializeField] ArmIK ik;
 
     //  ---------------- 이동 ----------------

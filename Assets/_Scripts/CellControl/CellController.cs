@@ -55,6 +55,9 @@ public class CellController : MonoBehaviour
 
     [Tooltip("교정 스테이션 카메라 5대(FaceCameraRig). 정지 위치에 선 상자의 송장 위치를 잰다")]
     [SerializeField] FaceCameraRig faceRig;
+    [Tooltip("연결하면 송장 유무 ONNX로 판정한다. 비워두면 기존 색상 비율 판정을 사용한다.")]
+    [SerializeField] LabelPresenceDetector faceDetector;
+    [SerializeField] LabelReader reader;
 
     [Tooltip("(선택) 교정 로봇암 (CorrectionSequence). 비우면 상자를 그 자리에서 바로 돌린다 (자리 표시)")]
     [SerializeField] CorrectionSequence correction;
@@ -435,17 +438,32 @@ public class CellController : MonoBehaviour
         }
     }
 
+    // (지훈님) 바깥에서 송장 면 판정만 할 때 부른다 (FaceJudgeAgent, InferenceIntegrationCheck). Measure()와 같다.
+    public bool TryJudgeFace(BoxInfo box) => box != null && Measure(box);
+
     //  카메라 5대로 송장 색 비율을 재 box.faceRatios에, 규칙 판정(비율이 가장 큰 면, 모두 기준 미만이면 Bottom)을 box.judgedFace에 기록한다.
     /// 상자만 잠깐 카메라 레이어로 옮겨 찍고 되돌린다 (한 프레임 안에 끝남).
     /// [!] FaceCameraRig.Measure()의 순서(위·오른쪽·뒤·왼쪽·앞)를 faceRatios 순서(0:위, 1:앞, 2:뒤, 3:왼쪽, 4:오른쪽)로 바꿔 넣는다.
     /// [주의] 카메라가 없으면 JudgeFail로 표시하고 false.
     bool Measure(BoxInfo box)
     {
-        if (!faceRig.IsBuilt)
+        if (faceRig == null || !faceRig.IsBuilt)
         {
             box.Mark(ExceptionReason.JudgeFail);
             RaiseAlarm("측정 실패", box.boxId);
             return false;
+        }
+
+        if (faceDetector != null)
+        {
+            if (!faceDetector.TryJudgeBox(box, faceRig, out string error))
+            {
+                box.Mark(ExceptionReason.JudgeFail);
+                RaiseAlarm("ONNX 판정 실패: " + error, box.boxId);
+                return false;
+            }
+            Debug.Log($"[Cell ONNX] {box.boxId} → {box.judgedFace} | {faceDetector.LastMilliseconds:F2} ms", this);
+            return true;
         }
 
         //  1) 상자만 카메라 레이어로 옮겨 5면을 찍고, 원래 레이어로 되돌린다
@@ -541,13 +559,13 @@ public class CellController : MonoBehaviour
             box.state = BoxState.Reading;
             Debug.Log($"[Cell] 판독 스테이션 도착 | {box.boxId} | 교정 -> 판독 {box.readArriveTime - box.correctArriveTime:F1}초", this);
 
-            //  2) 판독 · 검증
-            ///// : TODO :
-            //  [Label ML 준비 완료 후] reader.Read(box) -> LabelValidator.Validate -> box.destination 기록.
-            //  지금은 자리 표시: 1초 기다린 뒤 송장 정답으로 목적지를 정한다 (PlaceholderRead()).
-            yield return new WaitForSeconds(1f);
+            //  2) 판독 · 검증. LabelReader가 연결되어 있으면 OCR · 규칙 검증을 한다 (reader.Read()가 목적지 또는 예외를 기록).
+            //     연결이 없으면 (테스트 씬) 자리 표시: 1초 기다린 뒤 송장 정답으로 목적지를 정한다 (PlaceholderRead()).
+            bool placeholder = reader == null;
+            if (!placeholder) { yield return reader.Read(box); }
+            else { yield return new WaitForSeconds(1f); }
             if (!IsRunning) { yield break; }
-            PlaceholderRead(box);
+            if (placeholder) { PlaceholderRead(box); }
 
             //  3) 분류 구간으로 보낸다
             box.state = BoxState.Sorting;
@@ -598,6 +616,8 @@ public class CellController : MonoBehaviour
             Debug.LogWarning("[Cell] Face Rig에 카메라가 없습니다. FaceCameraRig의 '카메라 5대 배치 / 갱신' 버튼을 누르세요.", faceRig);
             return false;
         }
+        if (faceDetector != null && !faceDetector.ValidateConfiguration(out string modelError))
+        { Debug.LogWarning("[Cell] ONNX 준비 실패: " + modelError, this); return false; }
         if (faceRig.SeesEverything)
         {
             Debug.LogWarning(
@@ -717,4 +737,4 @@ public class CellController : MonoBehaviour
     {
         if (Playing()) { SetMode(ControlMode.Policy); }
     }
-}
+}

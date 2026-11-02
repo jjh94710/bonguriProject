@@ -39,14 +39,17 @@ public class LabelLayout : ScriptableObject
     public Vector2 labelSize = new Vector2(.036f, .045f);
 
     [Header("칸 위치 (송장 로컬 0 ~ 1)")]
-    [Tooltip("숫자 칸 5 개. A.2 의 '번호 5칸은 오른쪽 위'다.")]
+    // 칸은 실제 길이로 정사각형이어야 한다. 32 x 32 로 찍을 때 세로 시야와 가로 시야가
+    // 같아지는데, 칸이 세로로 길면 가로가 남아 옆 칸 숫자가 같이 들어온다.
+    //   가로 .075 x 36 mm = 2.70 mm  →  세로도 2.70 mm 가 되려면 2.70 / 45 = .06
+    [Tooltip("숫자 칸 5 개. A.2 의 '번호 5칸은 오른쪽 위'다. 실제 길이로 정사각형이어야 한다.")]
     public Rect[] digitCells =
     {
-        new Rect(.5275f, .775f, .075f, .11f),
-        new Rect(.6175f, .775f, .075f, .11f),
-        new Rect(.7075f, .775f, .075f, .11f),
-        new Rect(.7975f, .775f, .075f, .11f),
-        new Rect(.8875f, .775f, .075f, .11f),
+        new Rect(.5275f, .80f, .075f, .06f),
+        new Rect(.6175f, .80f, .075f, .06f),
+        new Rect(.7075f, .80f, .075f, .06f),
+        new Rect(.7975f, .80f, .075f, .06f),
+        new Rect(.8875f, .80f, .075f, .06f),
     };
 
     [Tooltip("주소 첫 단어(지역명) 칸. A.2 의 '주소는 아래쪽'이다.")]
@@ -67,8 +70,11 @@ public class LabelLayout : ScriptableObject
     [Tooltip("칸 둘레 여백 비율. Orthographic Size 가 칸 절반 × (1 + 이 값) 이 된다.")]
     [Min(0f)] public float camMargin = .12f;
 
+    // 설계안은 ±1 mm 였지만 그건 상자가 6 cm 정육면체이던 때 값이다. 지금 칸은 2.70 mm 라
+    // 창(3.02 mm)과 글자(2.43 mm) 사이 여유가 세로로 ±0.30 mm 뿐이다. ±1 mm 로 흔들면
+    // 목표 숫자의 위아래가 잘린 그림이 학습에 섞인다.
     [Tooltip("학습 때 카메라를 흔드는 범위 (m). 모름 칸 재판독에도 쓴다.")]
-    [Min(0f)] public float jitterPos = .001f;
+    [Min(0f)] public float jitterPos = .0002f;
 
     [Tooltip("학습 때 카메라를 비트는 범위 (도).")]
     [Min(0f)] public float jitterAngle = 3f;
@@ -76,21 +82,66 @@ public class LabelLayout : ScriptableObject
     // 글자 크기와 칸 보정값은 한 번 풀면 바뀌지 않는다. 송장마다 다시 재면
     // 학습 중에 ForceMeshUpdate 가 쌓여 느려지므로 캐시한다.
     [System.NonSerialized] float solvedDigitSize, solvedRegionSize;
-    [System.NonSerialized] float[] solvedOffsets;
+
+    // 마지막으로 그린 번호가 송장에서 차지한 자리(읽는 좌표, m). 자리마다 조준하지
+    // 않고 번호 전체를 한 장에 담을 때, 창을 글자에 딱 맞추는 데 쓴다.
+
+    /// <summary>
+    /// 글꼴 지표로 푼 크기에 곱하는 값. TMP 가 실제로 그리는 높이는 글꼴 지표만으로는
+    /// 정확히 안 나와서(패딩 · 내부 배율), 찍는 쪽이 한 장 찍어 재고 여기에 넣는다.
+    /// 학습과 운전에서 같은 크기를 쓰도록 보정값을 에셋에 저장한다.
+    /// </summary>
+    [Min(.0001f)] public float sizeTweak = 1f;
+
+    // Print 가 글자를 놓을 때 쓴 송장 평면의 가로 · 세로 축 (송장 로컬).
+    // Aim 이 같은 축을 써야 카메라가 글자 위에 선다. 두 곳이 어긋나면 카메라가
+    // 송장의 정반대 자리를 찍는데, 거기도 종이라서 빈 그림이 조용히 쌓인다.
+    [System.NonSerialized] Vector3 textRight = Vector3.right;
+    [System.NonSerialized] Vector3 textUp = Vector3.forward;
 
     // ── 칸 좌표 ─────────────────────────────────────────────────
 
+    /// <summary>번호 5 자리를 한 장에 찍을 때 쓰는 칸 번호.</summary>
+    public const int NumberBlockCell = -1;
+
+    /// <summary>
+    /// 숫자 칸 5 개를 모두 덮는 네모. 번호를 통째로 찍으면 자리마다 조준할 필요가 없고,
+    /// 가로로 길게 찍으므로 자리당 해상도는 칸 하나를 찍을 때와 같다.
+    /// </summary>
+    public Rect NumberBlock
+    {
+        get
+        {
+            if (digitCells == null || digitCells.Length == 0) return regionCell;
+
+            Rect r = digitCells[0];
+            foreach (Rect c in digitCells)
+                r = Rect.MinMaxRect(Mathf.Min(r.xMin, c.xMin), Mathf.Min(r.yMin, c.yMin),
+                                    Mathf.Max(r.xMax, c.xMax), Mathf.Max(r.yMax, c.yMax));
+            return r;
+        }
+    }
+
     public Rect CellOf(int index) =>
-        index >= 0 && digitCells != null && index < digitCells.Length ? digitCells[index] : regionCell;
+        index == NumberBlockCell ? NumberBlock
+        : index >= 0 && digitCells != null && index < digitCells.Length ? digitCells[index]
+        : regionCell;
 
     /// <summary>칸 가운데를 송장 로컬 미터 좌표로. 송장 가운데가 (0, 0) 이다.</summary>
     public Vector2 CellCenterMetres(int index)
     {
+        // 창은 설계상의 네모로 고정한다. 그려진 글자에 맞추면, 글자 크기가 틀어졌을 때
+        // 창이 같이 밀려 바코드 쪽을 보게 되고 크기 맞추기가 바코드를 재는 악순환이 된다.
         Rect r = CellOf(index);
         return new Vector2((r.center.x - .5f) * labelSize.x, (r.center.y - .5f) * labelSize.y);
     }
 
     /// <summary>칸 크기를 미터로.</summary>
+    /// <summary>
+    /// 찍을 창의 크기. 번호 전체도 설계상의 네모를 쓴다. 그려진 글자에 맞추면 번호마다
+    /// 창이 달라져 그림 크기가 제각각이 되는데, 학습 입력은 크기가 고정이어야 한다.
+    /// 자리는 CellCenterMetres 가 그려진 글자에 맞추므로 번호는 늘 가운데에 온다.
+    /// </summary>
     public Vector2 CellSizeMetres(int index)
     {
         Rect r = CellOf(index);
@@ -119,58 +170,15 @@ public class LabelLayout : ScriptableObject
     {
         if (text == null || string.IsNullOrEmpty(number)) return;
 
-        // 글자판은 숫자 칸 다섯 개를 다 덮는 사각형이다.
-        Rect first = digitCells[0], last = digitCells[digitCells.Length - 1];
-        float left = first.xMin, right = last.xMax;
-        var block = Rect.MinMaxRect(left, first.yMin, right, first.yMax);
+        // 번호는 통째로 읽으므로 자리마다 가로 위치를 지정하지 않는다. TMP 가 글꼴
+        // 간격대로 그리게 두면 자리 간격이 고르고, 찍는 창은 그려진 글자에 맞추므로
+        // 바코드나 종이 밖이 끼어들지 않는다 (AimAtNumber 가 DrawnNumber 를 쓴다).
+        Apply(text, NumberBlock, ref solvedDigitSize,
+              digitCells[0].height * labelSize.y, number);
 
-        Apply(text, block, ref solvedDigitSize, first.height * labelSize.y, number);
-        text.alignment = TextAlignmentOptions.TopLeft;
-
-        float blockWidth = block.width;
-
-        if (solvedOffsets == null || solvedOffsets.Length != number.Length)
-        {
-            // 1 차: 칸 왼쪽 끝에 글자를 놓는다.
-            var offsets = new float[number.Length];
-            for (int i = 0; i < number.Length && i < digitCells.Length; i++)
-                offsets[i] = (digitCells[i].xMin - left) / blockWidth;
-
-            text.text = Compose(number, offsets);
-            text.ForceMeshUpdate();
-
-            // 2 차: 글자 가운데가 칸 가운데에 오도록 한 번 민다. 글자 폭은 자리마다
-            // 거의 같으므로 한 번 민 값을 다음 송장에도 그대로 쓴다.
-            var info = text.textInfo;
-            var rect = text.rectTransform.rect;
-            for (int i = 0; i < number.Length && i < digitCells.Length; i++)
-            {
-                if (i >= info.characterCount || !info.characterInfo[i].isVisible) continue;
-
-                var ch = info.characterInfo[i];
-                float centre = (ch.bottomLeft.x + ch.topRight.x) * .5f;       // 글자판 로컬
-                float want = (digitCells[i].center.x - left) / blockWidth;     // 0 ~ 1
-                float have = (centre - rect.xMin) / rect.width;
-                offsets[i] += want - have;
-            }
-            solvedOffsets = offsets;
-        }
-
-        text.text = Compose(number, solvedOffsets);
+        text.alignment = TextAlignmentOptions.Center;
+        text.text = number;
         text.ForceMeshUpdate();
-    }
-
-    static string Compose(string number, float[] offsets)
-    {
-        var sb = new System.Text.StringBuilder(number.Length * 16);
-        for (int i = 0; i < number.Length; i++)
-        {
-            float pos = i < offsets.Length ? Mathf.Clamp01(offsets[i]) : 0f;
-            sb.Append("<pos=").Append((pos * 100f).ToString("F3",
-                System.Globalization.CultureInfo.InvariantCulture)).Append("%>");
-            sb.Append(number[i]);
-        }
-        return sb.ToString();
     }
 
     void PrintRegion(TextMeshPro text, string region)
@@ -209,6 +217,11 @@ public class LabelLayout : ScriptableObject
         // 거기에 실어야 한다. 이 상자들에서는 읽는 오른쪽이 로컬 -X, 위쪽이 -Z 다.
         Vector3 right = rt.localRotation * Vector3.right;
         Vector3 up = rt.localRotation * Vector3.up;
+
+        // Aim 이 그대로 쓴다. 글자를 놓은 축과 카메라가 겨누는 축은 반드시 같아야 한다.
+        textRight = right;
+        textUp = up;
+
         Vector3 offset = right * ((cell.center.x - .5f) * labelSize.x)
                        + up * ((cell.center.y - .5f) * labelSize.y);
 
@@ -217,7 +230,7 @@ public class LabelLayout : ScriptableObject
         rt.anchoredPosition3D = new Vector3(offset.x, lift, offset.z);
 
         if (solved <= 0f) solved = SolveSize(text, targetHeight, sample);
-        text.fontSize = solved;
+        text.fontSize = solved * Mathf.Max(.01f, sizeTweak);
     }
 
     /// <summary>
@@ -227,28 +240,23 @@ public class LabelLayout : ScriptableObject
     /// </summary>
     float SolveSize(TextMeshPro text, float targetHeight, string sample)
     {
-        float start = Mathf.Max(.0001f, fontSize);
-        text.fontSize = start;
-        text.text = sample;
-        text.ForceMeshUpdate();
+        float want = targetHeight * fillRatio;
 
-        var info = text.textInfo;
-        float measured = 0f;
-        for (int i = 0; i < info.characterCount; i++)
+        // 글꼴이 알려 주는 대문자 높이를 쓴다. characterInfo 네모도 mesh.bounds 도
+        // 글자 둘레 여백과 SDF 패딩을 포함한 상자라, 그걸 칸에 맞추면 보이는 글자가
+        // 절반쯤으로 작아진다. capLine 은 숫자가 실제로 차지하는 높이다.
+        var face = text.font != null ? text.font.faceInfo : default;
+        float cap = face.pointSize > 0f ? face.capLine / face.pointSize : 0f;
+
+        if (cap < 1e-4f)
         {
-            if (!info.characterInfo[i].isVisible) continue;
-            var ch = info.characterInfo[i];
-            measured = Mathf.Max(measured, ch.topRight.y - ch.bottomLeft.y);
+            Debug.LogWarning($"[LabelLayout] 글꼴에서 대문자 높이를 못 읽었다 "
+                           + $"(capLine {face.capLine}, pointSize {face.pointSize}). "
+                           + "글자 크기를 시작값으로 둔다.", this);
+            return Mathf.Max(.0001f, fontSize);
         }
 
-        if (measured < 1e-9f)
-        {
-            Debug.LogWarning($"[LabelLayout] '{sample}' 을 그리지 못했다. 글꼴 아틀라스에 "
-                           + "그 글자가 없을 수 있다.", this);
-            return start;
-        }
-
-        return start * (targetHeight * fillRatio) / measured;
+        return want / cap;
     }
 
     // ── 읽기 (LabelReaderAgent) ─────────────────────────────────
@@ -262,6 +270,24 @@ public class LabelLayout : ScriptableObject
         Aim(cam, label, DigitCount, jitter);
 
     /// <summary>
+    /// 번호 5 자리 전체 위에 카메라를 놓는다. 자리마다 조준하지 않으므로 칸이 어긋나
+    /// 라벨과 그림이 안 맞는 일이 없다. 그림은 가로로 길게 찍어야 한다
+    /// (가로세로비는 NumberBlockAspect).
+    /// </summary>
+    public void AimAtNumber(Camera cam, Transform label, bool jitter) =>
+        Aim(cam, label, NumberBlockCell, jitter);
+
+    /// <summary>번호 블록을 찍을 그림의 가로세로비. 세로 32 px 이면 가로는 이 값 × 32 다.</summary>
+    public float NumberBlockAspect
+    {
+        get
+        {
+            Vector2 s = CellSizeMetres(NumberBlockCell);
+            return s.y > 1e-9f ? s.x / s.y : 1f;
+        }
+    }
+
+    /// <summary>
     /// 카메라를 송장 좌표의 칸 위에 놓는다. 송장이 0 · 90 · 180 · 270 도 돌아가 있어도
     /// 카메라가 같이 돌아가므로 바코드로 방향을 찾는 단계가 필요 없다 (설계안 4.1).
     /// </summary>
@@ -272,37 +298,89 @@ public class LabelLayout : ScriptableObject
         Vector2 centre = CellCenterMetres(index);
         Vector2 size = CellSizeMetres(index);
 
-        // 송장 로컬에서 글자가 누운 평면은 XZ 이고, 송장이 보는 쪽이 +Y 다.
-        Vector3 local = new Vector3(centre.x, 0f, centre.y);
-        Vector3 up = label.up;
-        Vector3 right = label.right;
+        // 칸 좌표(0~1)는 글자가 읽히는 방향 기준이다. Print 가 글자를 놓을 때 쓴 바로 그
+        // 가로 · 세로 축에 실어야 카메라가 글자 위에 선다. 라벨의 X · Z 를 그대로 쓰면
+        // 이 상자들에서는 읽는 오른쪽이 -X, 위쪽이 -Z 라 정반대 자리를 겨눈다.
+        Vector3 planeRight = textRight, planeUp = textUp;
+
+        Vector3 local = planeRight * centre.x + planeUp * centre.y;
+        Vector3 normal = label.up;
 
         if (jitter && jitterPos > 0f)
-            local += new Vector3(Random.Range(-jitterPos, jitterPos), 0f,
-                                 Random.Range(-jitterPos, jitterPos));
+            local += planeRight * Random.Range(-jitterPos, jitterPos)
+                   + planeUp * Random.Range(-jitterPos, jitterPos);
 
-        float distance = Mathf.Max(.01f, size.y * 4f);
-        cam.transform.position = label.TransformPoint(local) + up * distance;
-        cam.transform.rotation = Quaternion.LookRotation(-up, right);
+        // 송장이 상자에 축소돼 붙어 있으면(ParcelBox 는 0.583 배) 칸 좌표는 송장 로컬이라
+        // 같이 줄어드는데, 카메라의 시야와 거리는 월드 길이다. 스케일을 곱하지 않으면
+        // 창만 1/0.583 = 1.7 배 넓게 열려 바코드와 종이 밖이 같이 들어온다.
+        float scale = Mathf.Abs(label.lossyScale.x);
+        if (scale < 1e-6f) scale = 1f;
+
+        float distance = Mathf.Max(.01f, size.y * 4f) * scale;
+        cam.transform.position = label.TransformPoint(local) + normal * distance;
+
+        // 카메라의 위쪽을 글자의 위쪽에 맞춰야 숫자가 바로 선 채로 찍힌다.
+        cam.transform.rotation = Quaternion.LookRotation(-normal, label.TransformDirection(planeUp));
+        Vector3 up = normal;
 
         if (jitter && jitterAngle > 0f)
             cam.transform.rotation = Quaternion.AngleAxis(
                 Random.Range(-jitterAngle, jitterAngle), up) * cam.transform.rotation;
 
         cam.orthographic = true;
-        cam.orthographicSize = size.y * .5f * (1f + camMargin);
-        cam.aspect = Mathf.Max(.0001f, size.x / size.y);
+        cam.orthographicSize = size.y * .5f * (1f + camMargin) * scale;
+
+        // 가로 비율은 찍는 그림(32 x 32, 96 x 32)이 정한다. 여기서 칸 비율로 고정하면
+        // 세로로 긴 숫자 칸이 정사각형 그림에 눌려 담겨 글자가 가로로 늘어난다.
+        cam.ResetAspect();
         cam.nearClipPlane = .001f;
-        cam.farClipPlane = distance + size.y;
+        cam.farClipPlane = distance + size.y * scale;
     }
 
     // ── 검산 ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 칸 위치와 크기를 SRS 부록 A.2 기본값으로 되돌린다.
+    /// 에셋에 한 번 저장된 값은 스크립트 기본값을 고쳐도 안 바뀌므로, 배치를 손본 뒤에는
+    /// 에셋에서 이걸 한 번 눌러야 한다 (인스펙터 ⋮ 메뉴).
+    /// </summary>
+    [ContextMenu("A.2 기본 배치로 되돌리기")]
+    public void ResetToA2()
+    {
+        labelSize = new Vector2(.036f, .045f);
+
+        digitCells = new[]
+        {
+            new Rect(.5275f, .80f, .075f, .06f),
+            new Rect(.6175f, .80f, .075f, .06f),
+            new Rect(.7075f, .80f, .075f, .06f),
+            new Rect(.7975f, .80f, .075f, .06f),
+            new Rect(.8875f, .80f, .075f, .06f),
+        };
+        regionCell = new Rect(.045f, .1875f, .35f, .105f);
+        barcodeCell = new Rect(.03f, .77f, .42f, .12f);
+
+        readPixels = 32;
+        camMargin = .12f;
+        fillRatio = .9f;
+        jitterPos = .0002f;
+        jitterAngle = 3f;
+
+        solvedDigitSize = solvedRegionSize = 0f;
+
+#if UNITY_EDITOR
+        // SetDirty 만으로는 메모리에서만 바뀐다. 디스크까지 써야 Unity 를 다시 켜도 남는다.
+        UnityEditor.EditorUtility.SetDirty(this);
+        UnityEditor.AssetDatabase.SaveAssets();
+#endif
+        Debug.Log("[LabelLayout] 칸 위치를 A.2 기본값으로 되돌렸다. "
+                + "숫자 칸은 2.70 x 2.70 mm 정사각형이다.", this);
+    }
 
     void OnValidate()
     {
         // 값을 바꿨으면 풀어 둔 글자 크기와 칸 보정값을 버리고 다시 풀게 한다.
         solvedDigitSize = solvedRegionSize = 0f;
-        solvedOffsets = null;
 
         if (digitCells == null || digitCells.Length != DigitCount)
         {

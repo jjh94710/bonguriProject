@@ -14,35 +14,35 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LabelLayout
   font: {fileID: 11400000, guid: 5aa3495d63df168488783aeb69618d27, type: 2}
   fontSize: 0.005
-  fillRatio: 0.88
+  fillRatio: 0.9
   bold: 1
   labelSize: {x: 0.036, y: 0.045}
   digitCells:
   - serializedVersion: 2
     x: 0.5275
-    y: 0.775
+    y: 0.8
     width: 0.075
-    height: 0.11
+    height: 0.06
   - serializedVersion: 2
     x: 0.6175
-    y: 0.775
+    y: 0.8
     width: 0.075
-    height: 0.11
+    height: 0.06
   - serializedVersion: 2
     x: 0.7075
-    y: 0.775
+    y: 0.8
     width: 0.075
-    height: 0.11
+    height: 0.06
   - serializedVersion: 2
     x: 0.7975
-    y: 0.775
+    y: 0.8
     width: 0.075
-    height: 0.11
+    height: 0.06
   - serializedVersion: 2
     x: 0.8875
-    y: 0.775
+    y: 0.8
     width: 0.075
-    height: 0.11
+    height: 0.06
   regionCell:
     serializedVersion: 2
     x: 0.045
@@ -57,5 +57,6 @@ MonoBehaviour:
     height: 0.12
   readPixels: 32
   camMargin: 0.12
-  jitterPos: 0.001
+  jitterPos: 0.0002
   jitterAngle: 3
+  sizeTweak: 10.018552
