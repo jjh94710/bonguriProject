@@ -635,7 +635,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BoxInfo
   boxId: 
   createdTime: 0
-  initialFace: 0
+  initialFace: 6
   hasLabel: 1
   labelNumber: 22137
   labelRegion: "\uB300\uC804"
@@ -650,7 +650,7 @@ MonoBehaviour:
   - 0
   - 0
   - 0
-  judgedFace: 0
+  judgedFace: 6
   rotationCount: 0
   chosenRotation: {x: 0, y: 0, z: 0}
   flipped: 0
