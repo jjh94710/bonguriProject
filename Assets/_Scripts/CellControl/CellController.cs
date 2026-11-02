@@ -53,6 +53,9 @@ public class CellController : MonoBehaviour
 
     [Tooltip("교정 스테이션 카메라 5대(FaceCameraRig). 정지 위치에 선 상자의 송장 위치를 잰다")]
     [SerializeField] FaceCameraRig faceRig;
+    [Tooltip("연결하면 송장 유무 ONNX로 판정한다. 비워두면 기존 색상 비율 판정을 사용한다.")]
+    [SerializeField] LabelPresenceDetector faceDetector;
+    [SerializeField] LabelReader reader;
 
                     ///// : TODO : 
     //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
@@ -422,13 +425,27 @@ public class CellController : MonoBehaviour
     /// 상자만 잠깐 카메라 레이어로 옮겨 찍고 되돌린다 (한 프레임 안에 끝남).
     /// [!] FaceCameraRig.Measure()의 순서(위·오른쪽·뒤·왼쪽·앞)를 faceRatios 순서(0:위, 1:앞, 2:뒤, 3:왼쪽, 4:오른쪽)로 바꿔 넣는다.
     /// [주의] 카메라가 없으면 JudgeFail로 표시하고 false.
+    public bool TryJudgeFace(BoxInfo box) => box != null && Measure(box);
+
     bool Measure(BoxInfo box)
     {
-        if(!faceRig.IsBuilt)
+        if(faceRig == null || !faceRig.IsBuilt)
         {
             box.Mark(ExceptionReason.JudgeFail);
             RaiseAlarm("측정 실패", box.boxId);
             return false;
+        }
+
+        if (faceDetector != null)
+        {
+            if (!faceDetector.TryJudgeBox(box, faceRig, out string error))
+            {
+                box.Mark(ExceptionReason.JudgeFail);
+                RaiseAlarm("ONNX 판정 실패: " + error, box.boxId);
+                return false;
+            }
+            Debug.Log($"[Cell ONNX] {box.boxId} → {box.judgedFace} | {faceDetector.LastMilliseconds:F2} ms", this);
+            return true;
         }
 
         //  1) 상자만 카메라 레이어로 옮겨 5면을 찍고, 원래 레이어로 되돌린다
@@ -525,11 +542,9 @@ public class CellController : MonoBehaviour
             box.state = BoxState.Reading;
             Debug.Log($"[Cell] 판독 스테이션 도착 | {box.boxId} | 교정 -> 판독 {box.readArriveTime - box.correctArriveTime:F1}초", this);
 
-            //  2) 판독 · 검증
-                                ///// : TODO :
-            //  [Label ML 준비 완료 후] reader.Read(box) -> LabelValidator.Validate -> box.destination 기록.
-            //  지금은 자리 표시(작업 시간 1초 흉내)만 둔다.
-            yield return new WaitForSeconds(1f);
+            //  2) 실제 OCR · 규칙 검증. 미연결은 성공으로 처리하지 않는다.
+            if (reader != null) yield return reader.Read(box);
+            else { box.Mark(ExceptionReason.ReadFail); Debug.LogError("[Cell] LabelReader가 연결되지 않았습니다.", this); }
             if (!IsRunning) { yield break; }
 
             //  3) 분류 구간으로 보낸다
@@ -565,6 +580,8 @@ public class CellController : MonoBehaviour
             Debug.LogWarning("[Cell] Face Rig에 카메라가 없습니다. FaceCameraRig의 '카메라 5대 배치 / 갱신' 버튼을 누르세요.", faceRig);
             return false;
         }
+        if (faceDetector != null && !faceDetector.ValidateConfiguration(out string modelError))
+        { Debug.LogWarning("[Cell] ONNX 준비 실패: " + modelError, this); return false; }
         if(faceRig.SeesEverything)
         {
             Debug.LogWarning(

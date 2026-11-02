@@ -61,6 +61,42 @@ public static class LabelPresenceSetup
     }
     [System.Serializable] class Deployment { public float threshold; }
 
+    [MenuItem("Tools/Factory ML/송장 유무/3. Inference Engine 공정 연동 검증 준비")]
+    static void Integration()
+    {
+        if (Application.isPlaying) { Debug.LogError("Play를 정지하세요."); return; }
+        Evaluate();
+        var agent = Object.FindAnyObjectByType<FaceJudgeAgent>();
+        var rig = agent != null ? agent.GetComponent<FaceCameraRig>() : null;
+        var detector = agent != null ? agent.GetComponent<LabelPresenceDetector>() : null;
+        if (rig == null || detector == null || !detector.HasModel) return;
+        const string scene = "Assets/Scenes/InferenceEngineValidation.unity";
+        if (!EditorSceneManager.SaveScene(agent.gameObject.scene, scene)) return;
+        var cellObject = GameObject.Find("InferenceValidationCell");
+        if (cellObject == null) cellObject = new GameObject("InferenceValidationCell");
+        var cell = cellObject.GetComponent<CellController>();
+        if (cell == null) cell = cellObject.AddComponent<CellController>();
+        var cellEdit = new SerializedObject(cell);
+        cellEdit.FindProperty("settings").objectReferenceValue = AssetDatabase.LoadAssetAtPath<CellSettings>("Assets/_Factory/CellSettings.asset");
+        cellEdit.FindProperty("faceRig").objectReferenceValue = rig;
+        cellEdit.FindProperty("faceDetector").objectReferenceValue = detector;
+        cellEdit.ApplyModifiedProperties();
+        var edit = new SerializedObject(agent);
+        edit.FindProperty("integrationCell").objectReferenceValue = cell;
+        edit.FindProperty("evaluationSeed").intValue = 20261105;
+        edit.ApplyModifiedProperties();
+        var check = agent.GetComponent<InferenceIntegrationCheck>();
+        if (check == null) check = agent.gameObject.AddComponent<InferenceIntegrationCheck>();
+        var checkEdit = new SerializedObject(check);
+        checkEdit.FindProperty("agent").objectReferenceValue = agent;
+        checkEdit.FindProperty("rig").objectReferenceValue = rig;
+        checkEdit.FindProperty("detector").objectReferenceValue = detector;
+        checkEdit.FindProperty("cell").objectReferenceValue = cell;
+        checkEdit.ApplyModifiedProperties();
+        EditorSceneManager.SaveScene(agent.gameObject.scene);
+        Debug.Log("[Inference Engine] 별도 검증 씬 준비 완료. Play하면 CellController 경유 360상자와 오류 처리를 검사합니다.");
+    }
+
     static FaceJudgeAgent Configure()
     {
         if (Application.isPlaying) { Debug.LogError("Play를 정지하고 실행하세요."); return null; }
@@ -73,6 +109,7 @@ public static class LabelPresenceSetup
         edit.FindProperty("evaluationSeed").intValue = 20261103;
         edit.FindProperty("slowPreview").boolValue = false;
         edit.FindProperty("auditDecisions").boolValue = false;
+        edit.FindProperty("integrationCell").objectReferenceValue = null;
         edit.ApplyModifiedProperties();
         var policy = agent.GetComponent<BehaviorParameters>();
         policy.Model = null;

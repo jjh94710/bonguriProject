@@ -45,6 +45,7 @@ public class FaceJudgeAgent : Agent
     string presenceDatasetPath;
     StreamWriter presenceManifest;
     LabelPresencePairCheck presencePairCheck;
+    [SerializeField] CellController integrationCell;
     System.Random evaluationRandom;
     readonly int[] confusion = new int[36];
     public bool EvaluationFinished { get; private set; }
@@ -260,7 +261,17 @@ public class FaceJudgeAgent : Agent
                 else OnEpisodeBegin();
                 return;
             }
-            var face = presencePairCheck != null ? presencePairCheck.Judge(rig, presenceDetector, currentLabel, expected) : presenceDetector.Judge(rig);
+            BoxFace face;
+            if (trainingMode && integrationCell != null)
+            {
+                var box = sample.GetComponent<BoxInfo>();
+                if (box == null || !integrationCell.TryJudgeFace(box))
+                    throw new InvalidOperationException("CellController를 통한 ONNX 판정에 실패했습니다.");
+                face = box.judgedFace;
+                var integrationCheck = GetComponent<InferenceIntegrationCheck>();
+                if (integrationCheck != null) integrationCheck.VerifyRotation(box, face);
+            }
+            else face = presencePairCheck != null ? presencePairCheck.Judge(rig, presenceDetector, currentLabel, expected) : presenceDetector.Judge(rig);
             OnActionReceived(new ActionBuffers(ActionSegment<float>.Empty, new ActionSegment<int>(new[] { (int)face })));
             return;
         }
