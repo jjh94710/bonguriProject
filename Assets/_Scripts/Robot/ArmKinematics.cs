@@ -53,6 +53,25 @@ public sealed class ArmKinematics
         }
         parts = geometry.ToArray();
     }
+    public bool HasRaisedElbow(float[] q, float minimumHeight)
+    {
+        Forward(q, out _, out _);
+        int elbow = Array.FindIndex(nodes, n => n.joint == 2);
+        return elbow >= 0 && world[elbow].MultiplyPoint3x4(Vector3.zero).y >= minimumHeight;
+    }
+    public bool WristAbovePlane(float[] q, float height)
+    {
+        Forward(q, out _, out _);
+        int firstWrist = Array.FindIndex(nodes, n => n.joint == 3);
+        foreach (var part in parts)
+        {
+            if (part.node < firstWrist) continue;
+            var matrix = world[part.node] * part.relative;
+            float extentY = (Mathf.Abs(matrix.m10) * part.size.x + Mathf.Abs(matrix.m11) * part.size.y + Mathf.Abs(matrix.m12) * part.size.z) * .5f;
+            if (matrix.MultiplyPoint3x4(part.center).y - extentY < height) return false;
+        }
+        return true;
+    }
     public float[] CurrentAngles()
     {
         var result = new float[Joints.Length];
@@ -174,8 +193,11 @@ public sealed class ArmKinematics
         delta.ToAngleAxis(out float angle, out Vector3 axis);
         return axis.sqrMagnitude < .1f || float.IsNaN(axis.x) ? Vector3.zero : axis * (Mathf.DeltaAngle(0, angle) * Mathf.Deg2Rad);
     }
-    public bool Solve(Vector3 target, Quaternion targetRotation, float[] seed, out float[] best, out float positionError, out float angleError, float allowedAngle = 3f, Func<float[], bool> acceptable = null)
+    public bool Solve(Vector3 target, Quaternion targetRotation, float[] seed, out float[] best, out float positionError, out float angleError,
+        float allowedAngle = 3f, Func<float[], bool> acceptable = null, float allowedPosition = .005f)
     {
+        float requiredPosition = Mathf.Clamp(allowedPosition, .0005f, .02f);
+        float convergencePosition = Mathf.Min(.003f, requiredPosition * .6f);
         best = (float[])seed.Clone(); float bestCost = float.PositiveInfinity;
         const float weight = .25f, epsilon = .25f;
         for (int attempt = 0; attempt < 9; attempt++)
@@ -188,7 +210,7 @@ public sealed class ArmKinematics
                 Vector3 dp = target - p, dr = RotationError(targetRotation, r);
                 float cost = dp.sqrMagnitude + weight * weight * dr.sqrMagnitude;
                 if (cost < bestCost && (acceptable == null || acceptable(q))) { bestCost = cost; Array.Copy(q, best, 6); }
-                if (dp.magnitude < .003f && dr.magnitude < 2 * Mathf.Deg2Rad) break;
+                if (dp.magnitude < convergencePosition && dr.magnitude < Mathf.Min(2f, allowedAngle * .65f) * Mathf.Deg2Rad) break;
                 var jacobian = new float[6, 6];
                 for (int j = 0; j < 6; j++)
                 {
@@ -210,14 +232,20 @@ public sealed class ArmKinematics
                 if (!Eliminate(normal)) break;
                 float largest = 0; for (int j = 0; j < 6; j++) largest = Mathf.Max(largest, Mathf.Abs(normal[j, 6] * Mathf.Rad2Deg));
                 float stepScale = largest > 7 ? 7 / largest : 1;
-                for (int j = 0; j < 6; j++) q[j] = Mathf.Clamp(q[j] + normal[j, 6] * Mathf.Rad2Deg * stepScale, lower[j], upper[j]);
+                for (int j = 0; j < 6; j++)
+                {
+                    float value = q[j] + normal[j, 6] * Mathf.Rad2Deg * stepScale;
+                    // Equivalent angles must stay close to the previous pose, inside the joint limits.
+                    float wrapped = value + 360f * Mathf.Round((seed[j] - value) / 360f);
+                    q[j] = Mathf.Clamp(wrapped >= lower[j] && wrapped <= upper[j] ? wrapped : value, lower[j], upper[j]);
+                }
             }
             Forward(best, out var bp, out var br);
-            if (Vector3.Distance(bp, target) < .005f && Quaternion.Angle(br, targetRotation) < 3) break;
+            if (Vector3.Distance(bp, target) < requiredPosition && Quaternion.Angle(br, targetRotation) < allowedAngle) break;
         }
         Forward(best, out var finalP, out var finalR);
         positionError = Vector3.Distance(finalP, target); angleError = Quaternion.Angle(finalR, targetRotation);
-        return positionError < .005f && angleError < allowedAngle;
+        return positionError < requiredPosition && angleError < allowedAngle && (acceptable == null || acceptable(best));
     }
     static bool Eliminate(float[,] a)
     {
@@ -233,3 +261,4 @@ public sealed class ArmKinematics
         return true;
     }
 }
+
