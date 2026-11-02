@@ -857,7 +857,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d035d2fbf25aa9840806e0367939faeb, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TotoBase
+  m_EditorClassIdentifier: Assembly-CSharp::ToteBase
   loader: {fileID: 0}
   slots:
   - {fileID: 5233697193215859022}

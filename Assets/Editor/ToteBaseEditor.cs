@@ -1,11 +1,11 @@
 using UnityEditor;
 using UnityEngine;
-[CustomEditor(typeof(TotoBase))]
-public sealed class TotoBaseEditor : Editor
+[CustomEditor(typeof(ToteBase))]
+public sealed class ToteBaseEditor : Editor
 {
     public override void OnInspectorGUI()
     {
-        DrawDefaultInspector(); var tote = (TotoBase)target;
+        DrawDefaultInspector(); var tote = (ToteBase)target;
         EditorGUILayout.LabelField("적재", tote.Count + " / " + tote.Capacity);
         EditorGUILayout.HelpBox("5×6cm 면만 흡착합니다. 아래층 4개 → 위층 4개 순서이며, 위층은 바로 아래 박스의 지지를 확인합니다.", MessageType.Info);
         if (tote.loader != null) EditorGUILayout.HelpBox(tote.loader.Status, MessageType.None);

@@ -14,7 +14,7 @@ public static class TotoSetup
         if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating || !File.Exists("Temp/TotoSetup.request")) return;
         File.Delete("Temp/TotoSetup.request"); Setup();
     }
-    [MenuItem("Tools/Bonguri/Configure TotoBase 2x2x2")]
+    [MenuItem("Tools/Bonguri/Configure ToteBase 2x2x2")]
     public static void Setup()
     {
         try
@@ -24,7 +24,7 @@ public static class TotoSetup
             var old = loader.container != null ? loader.container.gameObject : GameObject.Find("ParcelContainer_3x3_9");
             if (old == null) throw new Exception("Existing container missing.");
             var scene = old.scene;
-            string backup = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "/UnityBackups/bonguriProject/TotoBase/" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "/bongyuri.unity";
+            string backup = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "/UnityBackups/bonguriProject/ToteBase/" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "/bongyuri.unity";
             Directory.CreateDirectory(Path.GetDirectoryName(backup));
             if (!EditorSceneManager.SaveScene(scene, backup, true)) throw new Exception("Backup failed.");
             const string path = "Assets/prefabs/ParcelContainer_2x2x2_8.prefab";
@@ -38,7 +38,7 @@ public static class TotoSetup
                 Part(root, "RightWall", new Vector3(.071f, .092f, 0), new Vector3(.012f, .16f, .174f), material);
                 Part(root, "FrontWall", new Vector3(0, .092f, -.081f), new Vector3(.13f, .16f, .012f), material);
                 Part(root, "BackWall", new Vector3(0, .092f, .081f), new Vector3(.13f, .16f, .012f), material);
-                var tote = root.AddComponent<TotoBase>();
+                var tote = root.AddComponent<ToteBase>();
                 var slotRoot = new GameObject("Slots").transform; slotRoot.SetParent(root.transform, false);
                 for (int layer = 0; layer < 2; layer++) for (int z = 0; z < 2; z++) for (int x = 0; x < 2; x++)
                 {
@@ -52,7 +52,7 @@ public static class TotoSetup
             var instance = GameObject.Find("ParcelContainer_2x2x2_8");
             if (instance == null) { instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene); Undo.RegisterCreatedObjectUndo(instance, "Create eight-box tote"); }
             instance.transform.SetPositionAndRotation(old.transform.position, old.transform.rotation);
-            var toto = instance.GetComponent<TotoBase>(); Undo.RecordObject(toto, "Connect tote loader"); toto.loader = loader;
+            var toto = instance.GetComponent<ToteBase>(); Undo.RecordObject(toto, "Connect tote loader"); toto.loader = loader;
             Undo.RecordObject(loader, "Connect two-layer tote"); loader.toto = toto; loader.container = instance.transform; loader.slots = toto.slots;
             if (loader.targetBox == null)
                 loader.targetBox = UnityEngine.Object.FindObjectsByType<BoxCollider>().Where(b => b.attachedRigidbody != null && b.transform.Find("CardboardBody") != null)

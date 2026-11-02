@@ -7,7 +7,7 @@ using UnityEngine;
 [InitializeOnLoad]
 public static class TotoPlayTest
 {
-    static bool running, requested; static int last; static double since, next; static BoxAttacher loader; static TotoBase tote;
+    static bool running, requested; static int last; static double since, next; static BoxAttacher loader; static ToteBase tote;
     static Vector3 source; static float surface; static bool errors;
     static TotoPlayTest() { EditorApplication.update += Poll; }
     static void Poll()
@@ -27,7 +27,7 @@ public static class TotoPlayTest
         {
             if (loader == null)
             {
-                tote = UnityEngine.Object.FindObjectsByType<TotoBase>().Single(); loader = tote.loader;
+                tote = UnityEngine.Object.FindObjectsByType<ToteBase>().Single(); loader = tote.loader;
                 source = loader.targetBox.bounds.center; surface = loader.targetBox.bounds.min.y; next = Time.time + .5;
             }
             File.WriteAllText("C:/Users/Codelab/Documents/UnityBackups/bonguriProject/SuctionCrash/TotoTestProgress.txt", "sim=" + Time.time + " count=" + tote.Count + "/8 attached=" + loader.Attached + " status=" + loader.Status + " IK=" + loader.armIK.Status + " tcp=" + loader.tcp.position + " box=" + loader.targetBox.bounds.center);

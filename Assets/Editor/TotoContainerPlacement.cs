@@ -10,7 +10,7 @@ public static class TotoContainerPlacement
  static TotoContainerPlacement(){EditorApplication.update+=Poll;}
  static void Poll(){if(EditorApplication.isPlayingOrWillChangePlaymode||EditorApplication.isCompiling||EditorApplication.isUpdating||!File.Exists("Temp/TotoContainerPlacement.request"))return;File.Delete("Temp/TotoContainerPlacement.request");Run();}
  static void Run(){try{
- var t=UnityEngine.Object.FindObjectsByType<TotoBase>(FindObjectsSortMode.None).Single(x=>x.loader!=null);var a=t.loader;var box=a.targetBox;var k=new ArmKinematics(a.transform,a.tcp);var initial=k.CurrentAngles();var old=t.transform.position;var oldRot=t.transform.rotation;
+ var t=UnityEngine.Object.FindObjectsByType<ToteBase>(FindObjectsSortMode.None).Single(x=>x.loader!=null);var a=t.loader;var box=a.targetBox;var k=new ArmKinematics(a.transform,a.tcp);var initial=k.CurrentAngles();var old=t.transform.position;var oldRot=t.transform.rotation;
  var axis=a.tcp.InverseTransformDirection((a.tcp.position-a.suctionCup.position).normalized);var down=Quaternion.FromToRotation(a.tcp.rotation*axis,Vector3.down)*a.tcp.rotation;
  Vector3 best=old;Quaternion bestRot=oldRot;float bestScore=float.PositiveInfinity;int valid=0;
  var offsets=new[]{new Vector2(-.30f,-.22f),new Vector2(-.32f,0),new Vector2(-.25f,.25f),new Vector2(0,.35f),new Vector2(.25f,.25f),new Vector2(0,-.35f),new Vector2(.25f,-.25f),new Vector2(-.40f,0)};

@@ -46315,7 +46315,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d035d2fbf25aa9840806e0367939faeb, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TotoBase
+  m_EditorClassIdentifier: Assembly-CSharp::ToteBase
 --- !u!4 &1950511261 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4742466171515123135, guid: 08e7ba8ab40f8b94c91858fbd2df4a18, type: 3}

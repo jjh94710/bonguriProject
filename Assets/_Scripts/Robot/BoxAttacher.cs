@@ -9,7 +9,7 @@ using UnityEngine;
 public sealed class BoxAttacher : MonoBehaviour
 {
     public BackArmIK armIK;
-    public TotoBase toto;
+    public ToteBase toto;
     public Transform tcp, suctionCup, container;
     public BoxCollider targetBox;
     public Transform[] slots = new Transform[6];

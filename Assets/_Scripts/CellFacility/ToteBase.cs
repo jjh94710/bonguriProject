@@ -5,7 +5,7 @@ using UnityEngine;
 
 // Owns the 2 x 2 x 2 packing order and physical support checks.
 [DisallowMultipleComponent]
-public sealed class TotoBase : MonoBehaviour
+public sealed class ToteBase : MonoBehaviour
 {
     public BoxAttacher loader;
     public Transform[] slots = new Transform[8];

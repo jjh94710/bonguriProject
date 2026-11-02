@@ -4,7 +4,7 @@ using System;using System.IO;using System.Linq;using UnityEditor;using UnityEdit
  static TotoRobotPlacement(){EditorApplication.update+=Poll;}
  static void Poll(){if(EditorApplication.isPlayingOrWillChangePlaymode||EditorApplication.isCompiling||EditorApplication.isUpdating||!File.Exists("Temp/TotoPlacement.request"))return;File.Delete("Temp/TotoPlacement.request");Run();}
  static void Run(){
- var tote=UnityEngine.Object.FindFirstObjectByType<TotoBase>();var a=tote.loader;var box=a.targetBox;var ik=a.armIK;
+ var tote=UnityEngine.Object.FindFirstObjectByType<ToteBase>();var a=tote.loader;var box=a.targetBox;var ik=a.armIK;
  var original=a.transform.position;var scene=a.gameObject.scene;
  var stand=UnityEngine.Object.FindObjectsByType<BoxCollider>().Where(c=>!c.transform.IsChildOf(a.transform)&&c.bounds.size.y>.25f&&c.bounds.size.y<.8f&&Vector2.Distance(new Vector2(c.bounds.center.x,c.bounds.center.z),new Vector2(original.x,original.z))<.12f).OrderBy(c=>Mathf.Abs(c.bounds.max.y-original.y)).FirstOrDefault();
  var axis=a.tcp.InverseTransformDirection((a.tcp.position-a.suctionCup.position).normalized);
