@@ -66,6 +66,8 @@ public class CorrectionSequence : MonoBehaviour
     [Tooltip("내려놓을 벨트 면 (교정 구간 벨트의 Collider). 비우면 이름에 Conveyor가 들어간 오브젝트를 찾는다")]
     public Collider placementSurface;
 
+                        /////   : TODO :
+    /// ArmIK -> FrontArmIK & BackArmIK 클래스 분리된 점 반영
     [Tooltip("같은 오브젝트의 ArmIK. 비우면 찾는다")]
     [SerializeField] ArmIK ik;
 
@@ -193,7 +195,8 @@ public class CorrectionSequence : MonoBehaviour
         if (Arm != null) { Arm.StatusChanged += OnArmStatus; }
     }
 
-    // 첫 물리 스텝 뒤 지금 관절각을 유지한다. 빠진 칸이 있으면 경고만 남긴다.
+    // 첫 물리 스텝 뒤 빠진 칸을 확인한다. 빠진 칸이 있으면 경고만 남긴다.
+    /// 관절은 ArmIK.Initialize()가 준비 자세를 목표로 붙잡는다. 여기서 Hold()로 지금 관절각을 다시 잡으면 준비 자세로 가다가 멈춘다.
     IEnumerator Start()
     {
         yield return new WaitForFixedUpdate();
@@ -204,9 +207,8 @@ public class CorrectionSequence : MonoBehaviour
             yield break;
         }
         if (initialJointAngles == null || initialJointAngles.Length != 6)
-            { Debug.LogWarning($"[Correct] {name}: 준비 자세 관절각이 없습니다. Tools/Bonguri/Set Raised Ready Pose로 채우세요.", this); }
+        { Debug.LogWarning($"[Correct] {name}: 준비 자세 관절각이 없습니다. Tools/Bonguri/Set Raised Ready Pose로 채우세요.", this); }
 
-        Arm.Hold();
         SetStatus("준비 완료");
     }
 
@@ -269,7 +271,7 @@ public class CorrectionSequence : MonoBehaviour
         //  6) 결과 기록. 실패면 교정 실패로 표시한다
         LastSuccess = !failed;
         if (LastSuccess)
-            { Debug.Log($"[Correct] {box.boxId} 교정 끝 | 90° {CompletedQuarterTurns}번 | {Time.time - start:0.0}초", this); }
+        { Debug.Log($"[Correct] {box.boxId} 교정 끝 | 90° {CompletedQuarterTurns}번 | {Time.time - start:0.0}초", this); }
         else
         {
             box.Mark(ExceptionReason.CorrectionFail);
@@ -336,7 +338,7 @@ public class CorrectionSequence : MonoBehaviour
 
         //  확인: 올릴 면이 위로 왔는지
         if (!failed && !IsFaceUp(raiseLocal))
-            { Fail($"{faceToRaise} 면이 위로 오지 않음 (기울기 {FaceTilt(raiseLocal):0}°)"); }
+        { Fail($"{faceToRaise} 면이 위로 오지 않음 (기울기 {FaceTilt(raiseLocal):0}°)"); }
 
         if (failed) { yield return Recover(); }
         yield return GoHome();
@@ -463,7 +465,7 @@ public class CorrectionSequence : MonoBehaviour
         stepStarted = true;
         yield return WaitArm(false);
         if (!armArrived)
-            { Debug.LogWarning($"[Correct] {name}: 준비 자세에 도착하지 못했습니다 · {status}", this); }
+        { Debug.LogWarning($"[Correct] {name}: 준비 자세에 도착하지 못했습니다 · {status}", this); }
     }
 
     // 단계 동작이 시작한 이동이 끝날 때까지 기다린다. 결과는 armArrived.

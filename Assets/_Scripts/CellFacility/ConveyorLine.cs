@@ -187,8 +187,8 @@ public class ConveyorLine : MonoBehaviour
     void Start()
     {
         if (entry == null || exit == null)
-            { Debug.LogWarning($"[Conveyor] {lineName}: Entry / Exit가 비어 있습니다.", this); }
-        
+        { Debug.LogWarning($"[Conveyor] {lineName}: Entry / Exit가 비어 있습니다.", this); }
+
         if (stopper != null) { stopperUpPosition = stopper.position; }
 
         if (beltRenderers != null)
@@ -260,9 +260,10 @@ public class ConveyorLine : MonoBehaviour
         if (body != null && !body.isKinematic) { body.isKinematic = true; }
 
         //  정지 위치에서 releaseTolerance(5cm) 보다 멀거나 기울었으면 교정 실패로 표시한다 (그래도 보내서 NG로 간다)
+        /// 이미 예외 표시된 상자는 건너뛴다. 교정 로봇 실패를 CellController가 알렸는데 여기서 또 알리지 않게.
         Vector3 error = PositionOf(box) - stopPoint.position;
         error.y = 0f;
-        if(error.magnitude > releaseTolerance || !IsFlat(box))
+        if (!box.IsMarked && (error.magnitude > releaseTolerance || !IsFlat(box)))
         {
             box.Mark(ExceptionReason.CorrectionFail);
             if (cell != null) { cell.RaiseAlarm("교정 실패", box.boxId); }
@@ -348,7 +349,7 @@ public class ConveyorLine : MonoBehaviour
             }
 
             //  6) 분기 지점에 도착: 판이 나와 있으면 기다리고, 담당 상자면 푸셔에 넘긴다    (FR-08, FR-09)
-            if(pusher != null && distance >= divertAt - 0.0005f)
+            if (pusher != null && distance >= divertAt - 0.0005f)
             {
                 if (divertArrive < 0f) { divertArrive = Time.time; }
 
@@ -360,7 +361,7 @@ public class ConveyorLine : MonoBehaviour
                     if (Time.time - divertArrive < pusher.WaitLimit) { continue; }      //  받을 벨트 입구가 차 있다: 기다린다
 
                     Debug.LogWarning(
-                        $"[Conveyor] {lineName}: {box.boxId} 분류 실패 ({pusher.name}: {pusher.WaitLimit:0}초 동안 밀지 못해 그냥 지나감)", 
+                        $"[Conveyor] {lineName}: {box.boxId} 분류 실패 ({pusher.name}: {pusher.WaitLimit:0}초 동안 밀지 못해 그냥 지나감)",
                         this);
                     if (cell != null) { cell.RaiseAlarm("분류 실패", box.boxId); }
                 }
@@ -417,9 +418,9 @@ public class ConveyorLine : MonoBehaviour
         LastStopError = error.magnitude;
 
         if (LastStopError > stopTolerance)
-            { Debug.LogWarning($"[Conveyor] {lineName}: {box.boxId} 정지 오차 {LastStopError * 1000f:F0}mm (허용 {stopTolerance * 1000f:F0}mm 초과)", this); }
+        { Debug.LogWarning($"[Conveyor] {lineName}: {box.boxId} 정지 오차 {LastStopError * 1000f:F0}mm (허용 {stopTolerance * 1000f:F0}mm 초과)", this); }
         else
-            { Debug.Log($"[Conveyor] {lineName}: {box.boxId} 정지 위치 도착 (오차 {LastStopError * 1000f:F1} mm)", this); }
+        { Debug.Log($"[Conveyor] {lineName}: {box.boxId} 정지 위치 도착 (오차 {LastStopError * 1000f:F1} mm)", this); }
     }
 
     //  이 상자가 아직 지나지 않은 다음 푸셔 (index부터, 빈 칸 · 분기 지점이 없는 칸은 건너뛴다). 없으면 null.
