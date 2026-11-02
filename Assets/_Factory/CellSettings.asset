@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: CellSettings
   m_EditorClassIdentifier: Assembly-CSharp::CellSettings
   feedInterval: 10
-  faceTop: 0.9
+  faceTop: 0.7
   faceSide: 0.05
   faceBottom: 0.1
   noLabelRate: 0
