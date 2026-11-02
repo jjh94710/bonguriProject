@@ -41,7 +41,7 @@ public class CellSettings : ScriptableObject
     //  ---------------- 교정 · 판독 ----------------       (FR-06, UI-04)
     [Header("교정 · 판독")]
     [Tooltip("교정 스테이션에서 상자 1개당 회전 최대 횟수 (default: 2회)")]
-    [Range(1, 5)] public int maxRotations = 2;      // 180° 회전 포함, 어느 면이든 1회면 충분하다 (2회: "한 번 틀려도 한 번 더 기회")
+    [Range(1, 5)] public int maxRotations = 3;      // 180° 회전 포함, 어느 면이든 1회면 충분하다 (2회 --> 3회 협의: "틀려도 두 번 더 기회")
 
     [Tooltip("판독 재시도 한도. 모름 칸을 다시 읽는 횟수")]
     [Range(0, 5)] public int maxRetry = 2;
