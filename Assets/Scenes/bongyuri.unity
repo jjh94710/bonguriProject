@@ -22265,6 +22265,10 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 256
   background: {r: 0, g: 0, b: 0, a: 1}
+  useSideFillLights: 1
+  sideFillIntensity: 0.2
+  sideFillDistance: 0.35
+  sideFillColor: {r: 1, g: 1, b: 1, a: 1}
   labelMaxSaturation: 0.35
   labelMinBrightness: 0.35
   labelPixelRatio: 0.05
@@ -50068,6 +50072,7 @@ SceneRoots:
   - {fileID: 543861843}
   - {fileID: 654400001}
   - {fileID: 1266084486}
+  - {fileID: 721624609}
   - {fileID: 2056502070}
   - {fileID: 1377258910}
   - {fileID: 1886844479}
@@ -50095,7 +50100,6 @@ SceneRoots:
   - {fileID: 1796455243}
   - {fileID: 7969339724336185582}
   - {fileID: 1804329611}
+  - {fileID: 1191224892}
   - {fileID: 1864491003}
   - {fileID: 883096288}
-  - {fileID: 721624609}
-  - {fileID: 1191224892}
