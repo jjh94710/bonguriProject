@@ -126,13 +126,45 @@ public class CorrectionSequence : MonoBehaviour
             if (cancellingTurn || PositionError > positionTolerance || !status.StartsWith("목표 도착")) break;
             if (Mathf.Abs(Vector3.Dot(JawClosingDirection(), Vector3.up)) > .08f || JawHeightDifference() > .008f)
             { status = "집기 중단 · 두 손가락의 높이가 맞지 않습니다."; break; }
-            float start = Time.time, gripTarget = parcelGripCloseAmount;
-            while (Time.time - start < 3f && !cancellingTurn)
-            { gripper.closeAmount = Mathf.Lerp(0, gripTarget, (Time.time - start) / 3f); yield return null; }
-            yield return new WaitForSeconds(.8f);
-            float bottom = targetBox.bounds.min.y;
-            CycleStep = "들어 올리기"; Lift(); while (Moving && !cancellingTurn) yield return null;
-            if (cancellingTurn || targetBox.bounds.min.y - bottom < .03f) { status = "선택 면 교정 중단 · 박스를 들어 올리지 못했습니다."; break; }
+            // Prove the physical grasp before turning; a closed jaw command is not proof of contact.
+            Vector3 graspPosition = tcp.position;
+            Quaternion graspRotation = tcp.rotation;
+            Vector3 graspBoxPosition = targetBox.bounds.center;
+            float baseClose = GripCloseForBox();
+            bool lifted = false;
+            for (int attempt = 0; attempt < 3 && !cancellingTurn; attempt++)
+            {
+                CycleStep = "양쪽 손가락 집기 확인 · " + (attempt + 1);
+                float start = Time.time, fromClose = gripper.closeAmount;
+                float gripTarget = Mathf.Clamp(baseClose + attempt * .00075f, .003f, .04f);
+                while (Time.time - start < 3f && !cancellingTurn)
+                { gripper.closeAmount = Mathf.Lerp(fromClose, gripTarget, (Time.time - start) / 3f); yield return null; }
+                gripper.closeAmount = gripTarget;
+                yield return new WaitForSeconds(.8f);
+                if (cancellingTurn) break;
+                float bottom = targetBox.bounds.min.y;
+                CycleStep = "들어 올리기";
+                Lift(); while (Moving && !cancellingTurn) yield return null;
+                if (cancellingTurn || !status.StartsWith("목표 도착")) break;
+                yield return new WaitForSeconds(.4f);
+                lifted = targetBox.bounds.min.y - bottom >= .03f;
+                if (lifted) break;
+                if (attempt == 2) break;
+                // Retry only while the parcel still occupies the original grasp location.
+                if (Vector3.ProjectOnPlane(targetBox.bounds.center - graspBoxPosition, Vector3.up).magnitude > .008f)
+                { status = "집기 중단 · 박스가 옆으로 움직였습니다. 다시 접근하세요."; break; }
+                CycleStep = "미끄러짐 확인 · 집기 위치로 복귀";
+                OpenGripper(); yield return new WaitForSeconds(.4f);
+                if (!MoveTo(graspPosition, graspRotation)) break;
+                while (Moving && !cancellingTurn) yield return null;
+                if (cancellingTurn || !status.StartsWith("목표 도착")) break;
+            }
+            if (!lifted)
+            {
+                if (!cancellingTurn && status.StartsWith("목표 도착"))
+                    status = "집기 중단 · 닫힘량을 보정해 3회 시도했지만 박스가 따라 올라오지 않았습니다.";
+                break;
+            }
             CycleStep = "회전"; TurnHeldParcel90(); while ((Moving || parcelTurn != null) && !cancellingTurn) yield return null;
             if (cancellingTurn || !status.StartsWith("선택 회전 완료")) break;
             CycleStep = "내려놓기"; PlaceTurnedParcel(); while ((Moving || parcelTurn != null) && !cancellingTurn) yield return null;
@@ -511,7 +543,7 @@ public class CorrectionSequence : MonoBehaviour
             + Mathf.Abs(Vector3.Dot(targetBox.transform.TransformVector(Vector3.forward * targetBox.size.z), closing));
         return Mathf.Clamp(parcelGripCloseAmount + (.06f - width) * .5f, .003f, .04f);
     }
-    public void CloseGripper() { if (gripper != null) gripper.closeAmount = parcelGripCloseAmount; }
+    public void CloseGripper() { if (gripper != null) gripper.closeAmount = GripCloseForBox(); }
 
 
 
