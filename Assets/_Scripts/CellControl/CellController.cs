@@ -528,14 +528,31 @@ public class CellController : MonoBehaviour
             //  2) 판독 · 검증
                                 ///// : TODO :
             //  [Label ML 준비 완료 후] reader.Read(box) -> LabelValidator.Validate -> box.destination 기록.
-            //  지금은 자리 표시(작업 시간 1초 흉내)만 둔다.
+            //  지금은 자리 표시: 1초 기다린 뒤 송장 정답으로 목적지를 정한다 (PlaceholderRead()).
             yield return new WaitForSeconds(1f);
             if (!IsRunning) { yield break; }
+            PlaceholderRead(box);
 
             //  3) 분류 구간으로 보낸다
             box.state = BoxState.Sorting;
             readLine.Release();
         }
+    }
+
+    //  [자리 표시] 판독 결과 대신 송장 정답으로 목적지를 정한다. 분류 구간(푸슈)을 시험하기 위한 것.
+    /// 이미 예외가 표시된 상자는 그대로 둔다. 송장이 윗면에 없으면 NoLabel, 자리수 오류는 ReadFail, 그 밖의 규칙 위반은 RuleViolation.
+    /// [Label ML 준비 완료 후] 이 함수를 지운다.
+    void PlaceholderRead(BoxInfo box)
+    {
+        if(!box.IsMarked)
+        {
+            Destination answer = ExpectedDestination(box);
+            if (box.LabelFaceNow != BoxFace.Top) { box.Mark(ExceptionReason.NoLabel); }         //  송장 없는 상자도 여기(LabelFaceNow = None)
+            else if (answer != Destination.NG) { box.destination = answer; }
+            else if ((box.labelNumber ?? "").Length != 5) { box.Mark(ExceptionReason.ReadFail); }
+            else { box.Mark(ExceptionReason.RuleViolation); }
+        }
+        Debug.Log($"[Cell] 판독 (자리 표시) | {box.boxId} | 목적지 {box.destination}{(box.IsMarked ? $" ({box.reason})" : "")}", this);
     }
 
 
@@ -586,8 +603,6 @@ public class CellController : MonoBehaviour
                $"A {TerminalCounts[0]} · B {TerminalCounts[1]} · C {TerminalCounts[2]} | 회전 합 {Corrections} | " +
                $"예외율 {ExceptionRate * 100f:0.#}% | 시간당 {ThroughputPerHour:0}개";
     }
-
-
 
 
     //  ============================================================

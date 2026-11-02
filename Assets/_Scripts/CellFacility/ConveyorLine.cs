@@ -19,9 +19,8 @@ using UnityEngine;
 //  [대기열]   벨트 위 상자는 들어온 순서대로 줄을 서고, 앞 상자와 gap만큼 띄워 멈춘다.
 //  [!] 상자를 세우는 것은 스크립트이다. 스토퍼는 보이는 동작일 뿐 충돌로 막지 않는다.
 //  [!] 벨트는 수평이라고 본다 (상자 높이는 입구에서 정한 그대로 간다).
-//
-                    ///// : TODO : 
-//  푸셔(pushers)는 아직 없는 단계
+//  [분기]     분류 구간은 푸셔(pushers)를 지나가는 순서대로 갖는다. 상자가 분기 지점에 오면 한 번 세워 TryPush()를 묻는다.
+//             판이 나와 있거나, 담당 푸셔가 받을 벨트가 차 있다고 하면 그 자리에서 기다린다.
 //
 //  [설계서와의 차이]
 //      * 설계서의 - 칸은 [SerializeField]로 두었다.
@@ -58,8 +57,8 @@ public class ConveyorLine : MonoBehaviour
     [Tooltip("(선택) 이송 실패를 알릴 CellController. 비우면 Console 경고만 남긴다")]
     [SerializeField] CellController cell;
 
-                        ///// : TODO : 
-    //  [BoxPusher 구현 후] pushers (BoxPusher[], 진행 순서대로), 칸을 연다.
+    [Tooltip("(선택) 이 구간의 푸셔. 상자가 지나가는 순서대로 넣는다 (분류 구간: NG → A → C")]
+    [SerializeField] BoxPusher[] pushers;
 
     //  ---------------- 정지 위치 ----------------    (FR-02, FR-16)
     [Header("정지 위치 (선택, 비우면 멈추지 않음)")]
@@ -277,7 +276,7 @@ public class ConveyorLine : MonoBehaviour
     // 구간 목록에서 상자를 뺀다. 이 구간은 그 상자를 더 옮기지 않는다.
     /// [호출] 푸셔(밀어낼 때), 로봇이 상자를 다른 곳으로 옮길 때
     /// [!] 교정 로봇이 상자를 들었다가 같은 자리에 내려놓을 때는 부르지 않는다 (정지한 상자는 구간이 움직이지 않는다).
-    public void Take(BoxInfo box)
+    public void TakeAway(BoxInfo box)
     {
         if (box == null) { return; }
 
@@ -301,6 +300,8 @@ public class ConveyorLine : MonoBehaviour
     {
         float stopAt = stopPoint != null ? AlongBelt(stopPoint.position) + Random.Range(-stopErrorX, stopErrorX) : 0f;
         bool passedStop = stopPoint == null;        //  정지 위치가 없으면 처음부터 "지난 것"으로 본다
+        int pusherIndex = 0;                        //  아직 지나지 않은 다음 푸셔 번호
+        float divertArrive = -1f;                   //  지금 분기 지점에 도착한 시각 (기다리기 시작, -1 = 도착 전)
 
         while (true)
         {
@@ -333,8 +334,9 @@ public class ConveyorLine : MonoBehaviour
                 limit = Mathf.Min(limit, AlongBelt(PositionOf(ahead)) - HalfSize(ahead, Flow) - HalfSize(box, Flow) - gap);
             }
 
-                                ///// : TODO : 
-            //  [BoxPusher 구현 후] 분기 지점에 온 상자는 pusher.TryPush(this, box). 밀면 Take()로 빠지므로 여기서 끝난다.
+            BoxPusher pusher = NextPusher(ref pusherIndex);
+            float divertAt = pusher != null ? AlongBelt(pusher.DivertPoint.position) : 0f;
+            if (pusher != null) { limit = Mathf.Min(limit, divertAt); }
 
             //  5) 일정한 속도로 한 칸 옮긴다 (뒤로는 가지 않는다)
             float next = Mathf.Min(distance + speed * Time.fixedDeltaTime, limit);
@@ -345,14 +347,35 @@ public class ConveyorLine : MonoBehaviour
                 distance = next;
             }
 
-            //  6) 정지 위치에 도착
+            //  6) 분기 지점에 도착: 판이 나와 있으면 기다리고, 담당 상자면 푸셔에 넘긴다    (FR-08, FR-09)
+            if(pusher != null && distance >= divertAt - 0.0005f)
+            {
+                if (divertArrive < 0f) { divertArrive = Time.time; }
+
+                if (pusher.IsPushing) { continue; }                             //  앞 상자를 미는 중: 판이 돌아올 때까지 기다린다
+
+                if (pusher.TryPush(this, box)) { yield break; }                         //  담당 상자: 푸셔가 TakeAway()로 가져갔다
+                if (pusher.WantsPushed(box))
+                {
+                    if (Time.time - divertArrive < pusher.WaitLimit) { continue; }      //  받을 벨트 입구가 차 있다: 기다린다
+
+                    Debug.LogWarning(
+                        $"[Conveyor] {lineName}: {box.boxId} 분류 실패 ({pusher.name}: {pusher.WaitLimit:0}초 동안 밀지 못해 그냥 지나감)", 
+                        this);
+                    if (cell != null) { cell.RaiseAlarm("분류 실패", box.boxId); }
+                }
+                pusherIndex++;                                          //  담당이 아니면 그대로 지나간다
+                divertArrive = -1f;
+            }
+
+            //  7) 정지 위치에 도착
             if (!passedStop && distance >= stopAt - 0.0005f)
             {
                 Arrive(box);
                 continue;
             }
 
-            //  7) 보낸 상자의 뒷면이 스토퍼를 1 cm 넘게 지나면 스토퍼를 다시 올린다
+            //  8) 보낸 상자의 뒷면이 스토퍼를 1 cm 넘게 지나면 스토퍼를 다시 올린다
             if (box == releasedBox)
             {
                 float stopperAt = stopper != null ? AlongBelt(stopper.position) : stopAt;
@@ -363,7 +386,7 @@ public class ConveyorLine : MonoBehaviour
                 }
             }
 
-            //  8) 출구 도착: 다음 구간으로 넘긴다. 다음 구간이 없으면 지우고, 입구가 차 있으면 출구에서 기다린다
+            //  9) 출구 도착: 다음 구간으로 넘긴다. 다음 구간이 없으면 지우고, 입구가 차 있으면 출구에서 기다린다
             if (distance >= BeltLength - 0.0005f)
             {
                 if (nextLine == null)
@@ -399,6 +422,15 @@ public class ConveyorLine : MonoBehaviour
             { Debug.Log($"[Conveyor] {lineName}: {box.boxId} 정지 위치 도착 (오차 {LastStopError * 1000f:F1} mm)", this); }
     }
 
+    //  이 상자가 아직 지나지 않은 다음 푸셔 (index부터, 빈 칸 · 분기 지점이 없는 칸은 건너뛴다). 없으면 null.
+    BoxPusher NextPusher(ref int index)
+    {
+        if (pushers == null) { return null; }
+
+        while (index < pushers.Length && (pushers[index] == null || pushers[index].DivertPoint == null)) { index++; }
+        return index < pushers.Length ? pushers[index] : null;
+    }
+
     // 상자가 벨트 밖으로 벗어났는지 확인하고, 벗어났으면 이송 실패로 처리한다.
     /// 상자 중심이 벨트 폭의 절반을 넘었거나, 벨트 윗면보다 아래로 내려갔으면 벗어난 것으로 본다.
     /// 벗어난 상자는 목록에서 빼고, 물리를 켜서 떨어지게 둔다.
@@ -427,7 +459,8 @@ public class ConveyorLine : MonoBehaviour
     float AlongBelt(Vector3 position) => Vector3.Dot(position - entry.position, Flow);
 
     // 상자의 지금 위치. Rigidbody가 있으면 물리 엔진의 위치를 쓴다 (MovePosition과 같은 값).
-    static Vector3 PositionOf(BoxInfo box)
+    /// [호출] 이 구간, BoxPusher
+    public static Vector3 PositionOf(BoxInfo box)
     {
         Rigidbody body = box.GetComponent<Rigidbody>();
         return body != null ? body.position : box.transform.position;
@@ -444,7 +477,8 @@ public class ConveyorLine : MonoBehaviour
 
     // 상자를 move만큼 옮긴다.
     /// kinematic 상자는 MovePosition으로 옮겨야 물리 엔진이 "이동"으로 안다 (위에 놓인 물체도 같이 반응).
-    static void MoveBox(BoxInfo box, Vector3 move)
+    /// [호출] 이 구간, BoxPusher (밀어낼 때)
+    public static void MoveBox(BoxInfo box, Vector3 move)
     {
         Rigidbody body = box.GetComponent<Rigidbody>();
         if (body != null) { body.MovePosition(body.position + move); }
