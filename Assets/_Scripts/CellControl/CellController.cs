@@ -409,7 +409,7 @@ public class CellController : MonoBehaviour
 
                                 ///// : TODO :
             //  [CorrectionSequence 연결 후] RotateinPlace() 대신 correction.CorrectAt(box,face). LastSuccess가 false면 box.Mark(CorrectionFail) 후 끝냄
-            /// 상자 물리를 켜고 끄는 일은 CorrectionSequence가 한다 (벨트 위 상자는 kinematic).
+            /// 상자 물리를 켜기는 CorrectAt(), 끄기는 ConveyorLine.Release()가 한다 (벨트 위 상자는 kinematic).
             yield return RotateInPlace(box, face);
 
             box.rotationCount++;
