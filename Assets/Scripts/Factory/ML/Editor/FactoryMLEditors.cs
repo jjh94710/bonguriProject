@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -33,6 +33,13 @@ public class FaceCameraRigEditor : Editor
         {
             Undo.RegisterFullObjectHierarchyUndo(rig.gameObject, "Build Face Camera Rig");
             rig.BuildRig();
+            MarkDirty(rig);
+        }
+
+        if (GUILayout.Button("측면 보조 조명 4개 추가 / 갱신"))
+        {
+            Undo.RegisterFullObjectHierarchyUndo(rig.gameObject, "Build Face Fill Lights");
+            rig.BuildFillLights();
             MarkDirty(rig);
         }
 

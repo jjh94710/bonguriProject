@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -70,6 +70,9 @@ public class LabelDatasetGenerator : MonoBehaviour
     [SerializeField, Range(0f, 10f)] float angleJitter = 2.5f;
     [SerializeField, Range(0f, 0.1f)] float positionJitter = 0.02f;
 
+    [Header("면 안의 송장 배치 변화")]
+    [SerializeField] LabelPlacementRandomizer labelPlacement = new LabelPlacementRandomizer();
+
     // 에디터 프리뷰는 목록 첫 칸으로 찍어본다.
     public GameObject BoxPrefab => boxes != null && boxes.Length > 0 ? boxes[0].prefab : null;
     public Vector3 LabelLocalNormal => boxes != null && boxes.Length > 0 ? boxes[0].Normal : Vector3.up;
@@ -139,6 +142,7 @@ public class LabelDatasetGenerator : MonoBehaviour
 
         var temps = new List<Object>();
         var spawned = new List<(BoxEntry entry, GameObject go, GameObject label)>();
+        var placements = new Dictionary<GameObject, LabelPlacementRandomizer.Placement>();
         int written = 0;
 
         try
@@ -149,14 +153,26 @@ public class LabelDatasetGenerator : MonoBehaviour
             {
                 var go = SpawnBox(e.prefab, temps);
                 var lab = SampleBox.FindLabel(go, labelChildName);
+                var resolvedEntry = e;
+                if (FaceJudgeAudit.TryGetPaperNormal(go, lab, out Vector3 normal))
+                    resolvedEntry = new BoxEntry { prefab = e.prefab, weight = e.weight, labelLocalNormal = go.transform.InverseTransformDirection(normal).normalized };
+                foreach (var mesh in go.GetComponentsInChildren<MeshRenderer>(true))
+                {
+                    var captureProperties = new MaterialPropertyBlock();
+                    mesh.GetPropertyBlock(captureProperties);
+                    captureProperties.SetFloat("_FaceCaptureDynamic", 1f);
+                    mesh.SetPropertyBlock(captureProperties);
+                }
+                LabelTextOcclusion.Prepare(lab);
                 if (includeNoLabelSamples && lab == null)
                 {
                     Debug.LogWarning(
                         $"[LabelDataset] '{e.Name}' 에서 송장('{labelChildName}')을 못 찾았다. " +
                         "이 상자는 미부착 샘플을 빼고 만든다.", this);
                 }
+                placements[go] = new LabelPlacementRandomizer.Placement(go, lab, resolvedEntry.Normal);
                 go.SetActive(false);
-                spawned.Add((e, go, lab));
+                spawned.Add((resolvedEntry, go, lab));
             }
 
             // 흔들림이 크면 상자가 프레임 밖으로 잘린 채 찍힌다. 이미지만 보면 멀쩡해
@@ -187,6 +203,8 @@ public class LabelDatasetGenerator : MonoBehaviour
                 BoxFace target = noLabel ? BoxFace.Top : PickFace(rng);
                 pick.go.SetActive(true);
                 PlaceBox(pick.go.transform, target, rng, jitterRange, pick.entry.Normal);
+
+                placements[pick.go].Apply(labelPlacement, rng.NextDouble);
 
                 // 실제 자세에서 송장이 어느 면에 있는지 다시 계산한다(배치가 틀려도 정답은 맞게).
                 // 송장을 끈 표본은 다섯 면 어디에도 송장이 없다. 카메라가 없는 Bottom 으로 적는다.
@@ -350,6 +368,7 @@ public class LabelDatasetGenerator : MonoBehaviour
         sb.AppendLine($"  송장 이름 : {labelChildName}");
         sb.AppendLine($"  레이어    : {boxLayerName}");
         sb.AppendLine();
+        sb.AppendLine($"송장 배치 변화 : {labelPlacement.enabled}, 회전 ±{labelPlacement.rotationRange}도, 이동 {labelPlacement.positionRange}, 여백 {labelPlacement.edgeMargin}");
         sb.AppendLine("labels.csv 열");
         sb.AppendLine("  file      : images/ 아래 파일 경로");
         sb.AppendLine("  sample    : 상자 번호 (같은 번호 5 줄 = 한 상자의 5 면)");

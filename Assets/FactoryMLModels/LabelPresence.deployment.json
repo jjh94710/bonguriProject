@@ -1,0 +1,21 @@
+{
+  "threshold": 0.49999999999999994,
+  "width": 96,
+  "height": 96,
+  "layout": "NCHW",
+  "channels": "RGB",
+  "range": [
+    0,
+    1
+  ],
+  "origin": "top_left",
+  "output": "sigmoid_label_score",
+  "cameras": [
+    "Top",
+    "Front",
+    "Back",
+    "Left",
+    "Right"
+  ],
+  "no_detection": "Bottom"
+}

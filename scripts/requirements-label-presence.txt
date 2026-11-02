@@ -1,0 +1,5 @@
+# Tested with Python 3.10; the existing mlagents environment can also be used.
+numpy==1.23.5
+torch==2.1.1
+Pillow==12.3.0
+onnx==1.15.0
