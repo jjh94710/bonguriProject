@@ -18,7 +18,7 @@ MonoBehaviour:
   faceBottom: 0.1
   noLabelRate: 0
   wrongLabelRate: 0
-  maxRotations: 2
+  maxRotations: 3
   maxRetry: 2
   regionCodes: 0b0000001600000021000000i
   regionNames:

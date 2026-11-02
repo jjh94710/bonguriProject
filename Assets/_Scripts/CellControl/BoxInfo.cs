@@ -135,7 +135,7 @@ public class BoxInfo : MonoBehaviour
     {
         get
         {
-            if (label == null) { return BoxFace.None; }
+            if (label == null || !hasLabel) { return BoxFace.None; }
 
             Vector3 normal = label.up;          //  송장 종이가 바라보는 방향 (월드 좌표)
             BoxFace best = BoxFace.Top;

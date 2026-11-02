@@ -20,6 +20,12 @@ using UnityEngine;
 //      * IsRunning 속성을 추가했다. 운전 제어 패널이 버튼을 켜고 끌 때 쓴다.
 //      * ResetAlarm()은 알람만 풀고, 운전은 Run()으로 다시 시작한다. 설계서의 "운전 재개"를 작업자가 시작 버튼을 다시 누르는 것으로 해석했다.
 //      * 분류 성공 · 실패는 송장 정답(labelNumber, labelRegion)으로 찾은 터미널과 실제 목적지를 비교해 센다.
+//      * Run(n)은 feeder.StartFeeding(n)으로 상자를 넣는다 (설계서: FeedOne()을 n번).
+//      * Run(n)이 끝나는 조건에 "다 넣었고 처리 중인 상자 없음"을 더했다. 분류 구간이 없는 테스트 씬에서는 상자가 출구에서 지워져 처리 수가 늘지 않기 때문.
+//      * 처리 중인 상자 수는 feeder.InProcess로 센다 (설계서: 투입 수 - 처리 수).
+//      * 측정할 때 상자만 잠깐 카메라 레이어로 옮겨 찍는다. 뒤에 줄 선 상자 · 벨트 · 로봇은 찍히지 않는다 (설계서: 측면 카메라 위치를 씬 작업에서 정함).
+//      * 행동 선택(ChooseFace)은 위로 올릴 면을 돌려주고, Top이면 완료로 본다 (설계서: 완료 + 올릴 면 5개).
+//      * 카메라 5대가 없으면 운전을 시작하지 않는다 (Check). 운전 중에 없어지면 JudgeFail로 표시한다.
 //  ============================================================
 public class CellController : MonoBehaviour
 {
@@ -31,6 +37,9 @@ public class CellController : MonoBehaviour
     [Tooltip("같은 경고가 이 횟수만큼 연속되면 알람으로 멈춘다 (default: 3)")]
     [Min(1)][SerializeField] int maxConsecutiveErrors = 3;
 
+    [Tooltip("교정 스테이션 제한 시간(초). 도착부터 이 시간이 지나면 더 돌리지 않고 판독 구간으로 보낸다 (default: 10)")]
+    [Min(1f)][SerializeField] float correctTimeLimit = 10f;
+
     //  ---------------- 연결 ----------------
     [Header("연결")]
     [Tooltip("교정 스테이션 구간 (정지 위치가 있는 ConveyorLine)")]
@@ -39,16 +48,23 @@ public class CellController : MonoBehaviour
     [Tooltip("판독 스테이션 구간 (정지 위치가 있는 ConveyorLine)")]
     [SerializeField] ConveyorLine readLine;
 
+    [Tooltip("상자 투입 (BoxFeeder)")]
+    [SerializeField] BoxFeeder feeder;
+
+    [Tooltip("교정 스테이션 카메라 5대(FaceCameraRig). 정지 위치에 선 상자의 송장 위치를 잰다")]
+    [SerializeField] FaceCameraRig faceRig;
+    [Tooltip("연결하면 송장 유무 ONNX로 판정한다. 비워두면 기존 색상 비율 판정을 사용한다.")]
+    [SerializeField] LabelPresenceDetector faceDetector;
+    [SerializeField] LabelReader reader;
+
                     ///// : TODO : 
     //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
-    //      feeder (BoxFeeder)                       상자 투입
-    //      faceRig (FaceCameraRig)                  카메라 5대 송장 위치 측정
     //      correction (CorrectionSequence)          교정 로봇암 동작 (손가락 그리퍼, 물리 파지)
     //      loaders (LoadSequence[3])                터미널 끝 흡착 로봇 (Check()와 알람 정지용)
     //      correctionAgent (CorrectionAgent)        ML ① 교정 학습 정책
     //      reader (LabelReaderAgent)                ML ② 송장 판독 정책
     //      log (ProductionLog)                      세션 로그
-    //      제한 시간: supplyTimeout 30, correctTimeLimit 10, readTimeout 2, inferenceTimeout 1 (초)
+    //      제한 시간: supplyTimeout 30, readTimeout 2, inferenceTimeout 1 (초)
 
 
     //  ============================================================
@@ -93,7 +109,6 @@ public class CellController : MonoBehaviour
     /// 이상 상황 알림 (종류, 상자 ID) --> AlarmUI가 구독
     public event System.Action<string, string> OnAlarm;
 
-    //Coroutine runRoutine;                                   //  지금 돌고 있는 운전 코루틴
     bool stopRequested;                                     //  사이클 정지를 눌렀는지
     bool alarmActive;                                       //  알람으로 멈춘 상태인지 (ResetAlarm()으로 해제)
     string lastAlarmType;                                   //  마지막 경고 종류 (연속 횟수 세기용)
@@ -155,8 +170,7 @@ public class CellController : MonoBehaviour
         if (!IsRunning || stopRequested) { return; }
 
         stopRequested = true;
-                    ///// : TODO : 
-        //  [다음 단계] feeder.StopFeeding();
+        feeder.StopFeeding();
         Debug.Log("[Cell] 사이클 정지 요청 | 처리 중인 상자가 끝나면 멈춤", this);
     }
 
@@ -195,8 +209,9 @@ public class CellController : MonoBehaviour
             alarmActive = true;
             stopRequested = true;
             State = CellState.Stopped;
-            ///// : TODO : 
-            //  [다음 단계] feeder.StopFeeding(); 벨트 · 교정 로봇 · 끝 로봇 3대 정지
+            if (feeder != null) { feeder.StopFeeding(); }       // 운전 전 테스트에서도 불릴 수 있어 빈 칸을 확인한다
+                                ///// : TODO : 
+            //  [다음 단계] 벨트 · 교정 로봇 · 끝 로봇 3대 정지
             Debug.LogError($"[Cell] 알람 정지 | {type} {consecutiveErrors}회 연속", this);
         }
     }
@@ -293,19 +308,31 @@ public class CellController : MonoBehaviour
         State = CellState.Running;
         Debug.Log($"[Cell] 운전 시작 | {(count > 0 ? $"상자 {count}개" : "연속 운전")} | 제어 방식 {Mode}", this);
 
-        ///// : TODO : 
-        //  [다음 단계] count > 0이면 feeder.FeedOne()을 count번, 0이면 feeder.StartFeeding()
+        //  투입을 먼저 시작한다. Feeder의 칸이 비어 시작하지 못하면 운전도 멈춘다
+        feeder.StartFeeding(count);
+        if(!feeder.IsFeeding)
+        {
+            State = CellState.Stopped;
+            IsRunning = false;
+            Debug.LogWarning("[Cell] 투입을 시작하지 못해 운전을 멈춥니다. Feeder 경고를 확인하세요.", this);
+            yield break;
+        }
+
         Coroutine correctLoop = StartCoroutine(CorrectStationLoop());
         Coroutine readLoop = StartCoroutine(ReadStationLoop());
 
         while (!alarmActive)
         {
             if (count > 0 && Processed >= target) { break; }
+            if (count > 0 && !feeder.IsFeeding && InProcessCount() == 0) { break; }
             if (stopRequested && InProcessCount() == 0) { break; }
+
+            State = feeder.IsPaused ? CellState.Waiting : CellState.Running;        // 대기 상자가 많아 투입을 멈추면 대기 (FR-10)
             yield return null;
         }
 
-        //  스테이션 코루틴을 멈춘다. 멈추고 곧바로 다시 Run()을 눌러도 코루틴이 두 벌로 돌지 않게 한다
+        //  투입과 스테이션 코루틴을 멈춘다. 멈추고 곧바로 다시 Run()을 눌러도 코루틴이 두 벌로 돌지 않게 한다
+        feeder.StopFeeding();
         StopCoroutine(correctLoop);
         StopCoroutine(readLoop);
         State = CellState.Stopped;
@@ -313,12 +340,11 @@ public class CellController : MonoBehaviour
         Debug.Log($"[Cell] 운전 끝 | {Summary()}", this);
     }
 
-                    ///// : TODO : 
     // 처리 중인 상자 수 (투입했지만 아직 Finish()되지 않은 상자).
-    /// [BoxFeeder 구현 후] feeder.FedCount - Processed로 바꾼다. 지금은 투입 스크립트가 없어 0.
+    /// feeder.InProcess를 쓴다. 설계서의 "투입 수 - 처리 수" 대신, 출구에서 지워진 상자도 빠진다.
     int InProcessCount()
     {
-        return 0;
+        return feeder != null ? feeder.InProcess : 0;
     }
 
     // 교정 스테이션: 도착 대기 → JudgeAndCorrect() → 판독 구간으로 이송    (FR-03, FR-05, FR-06, FR-16)
@@ -350,14 +376,154 @@ public class CellController : MonoBehaviour
         }
     }
 
-    // 측정 → 행동 선택(완료 또는 회전) → 회전 뒤 다시 측정. 완료가 나오거나 제한 시간이 될 때까지 반복.
-    /// [Correction ML 준비 완료 후] FaceCameraRig, CorrectionSequence, CorrectionAgent 연결 후 채운다.
+    // 측정 → 행동 선택(완료 또는 회전) → 회전 뒤 다시 측정. 완료 · 회전 한도 · 제한 시간 중 하나가 될 때까지 반복.
+    /// [종료] 회전이 maxRotations에 닿거나 correctTimeLimit이 지나면 더 돌리지 않고 끝낸다 (예외 표시는 하지 않는다).
+    ///        송장이 끝내 위로 오지 않은 상자는 판독 스테이션에서 NoLabel이 된다.
+    /// [!] 카메라가 없어 측정하지 못하면 JudgeFail로 표시하고 바로 끝낸다.
+    /// [Correction ML 준비 완료 후] CorrectionSequence, CorrectionAgent 연결 후 채운다.
     IEnumerator JudgeAndCorrect(BoxInfo box)
     {
-                            ///// : TODO :
-        //  [Correction ML 준비 완료 후] 아래 자리 표시(작업 시간 1초 흉내)를 지우고 실제 동작으로 바꾼다 
-        /// 상자 물리를 켜고 끄는 일은 CorrectionSequence가 한다 (벨트 위 상자는 kinematic).
-        yield return new WaitForSeconds(1f);
+        while(true)
+        {
+            //  1) 측정
+            if (!Measure(box)) { yield break; }
+
+            //  2) 행동 선택. Top이면 완료
+            BoxFace face = ChooseFace(box);
+            if(face == BoxFace.Top)
+            {
+                string result = box.judgedFace == BoxFace.Top ? "송장 위" : "뒤집은 뒤에도 송장이 안 보임";
+                Debug.Log($"[Cell] 교정 끝 | {box.boxId} | {result} | 회전 {box.rotationCount}회", this);
+                yield break;
+            }
+
+            //  3) 회전 한도 · 제한 시간. 넘으면 지금 자세 그대로 보낸다
+            bool limit = box.rotationCount >= Settings.maxRotations;
+            if(limit || Time.time - box.correctArriveTime >= correctTimeLimit)
+            {
+                string why = limit ? $"회전 한도 {Settings.maxRotations}회" : $"제한 시간 {correctTimeLimit:0}초";
+                Debug.LogWarning($"[Cell] 교정 중단 ({why}) | {box.boxId} | 판정 {box.judgedFace} 그대로 보냄", this);
+                yield break;
+            }
+
+            //  4) 올릴 면을 위로 돌린다. 끝나면 1)로 돌아가 다시 측정
+            box.state = BoxState.Correcting;
+            box.chosenRotation = Quaternion.FromToRotation(BoxInfo.FaceDirection(face), Vector3.up).eulerAngles;
+
+                                ///// : TODO :
+            //  [CorrectionSequence 연결 후] RotateinPlace() 대신 correction.CorrectAt(box,face). LastSuccess가 false면 box.Mark(CorrectionFail) 후 끝냄
+            /// 상자 물리를 켜기는 CorrectAt(), 끄기는 ConveyorLine.Release()가 한다 (벨트 위 상자는 kinematic).
+            yield return RotateInPlace(box, face);
+
+            box.rotationCount++;
+            if (face == BoxFace.Bottom) { box.flipped = true; }
+            box.state = BoxState.Judging;
+        }
+    }
+
+    //  카메라 5대로 송장 색 비율을 재 box.faceRatios에, 규칙 판정(비율이 가장 큰 면, 모두 기준 미만이면 Bottom)을 box.judgedFace에 기록한다.
+    /// 상자만 잠깐 카메라 레이어로 옮겨 찍고 되돌린다 (한 프레임 안에 끝남).
+    /// [!] FaceCameraRig.Measure()의 순서(위·오른쪽·뒤·왼쪽·앞)를 faceRatios 순서(0:위, 1:앞, 2:뒤, 3:왼쪽, 4:오른쪽)로 바꿔 넣는다.
+    /// [주의] 카메라가 없으면 JudgeFail로 표시하고 false.
+    public bool TryJudgeFace(BoxInfo box) => box != null && Measure(box);
+
+    bool Measure(BoxInfo box)
+    {
+        if(faceRig == null || !faceRig.IsBuilt)
+        {
+            box.Mark(ExceptionReason.JudgeFail);
+            RaiseAlarm("측정 실패", box.boxId);
+            return false;
+        }
+
+        if (faceDetector != null)
+        {
+            if (!faceDetector.TryJudgeBox(box, faceRig, out string error))
+            {
+                box.Mark(ExceptionReason.JudgeFail);
+                RaiseAlarm("ONNX 판정 실패: " + error, box.boxId);
+                return false;
+            }
+            Debug.Log($"[Cell ONNX] {box.boxId} → {box.judgedFace} | {faceDetector.LastMilliseconds:F2} ms", this);
+            return true;
+        }
+
+        //  1) 상자만 카메라 레이어로 옮겨 5면을 찍고, 원래 레이어로 되돌린다
+        int boxLayer = box.gameObject.layer;
+        int rigLayer = RigLayer();
+        if (rigLayer >= 0) { SetLayer(box.gameObject, rigLayer); }
+        float[] ratios = faceRig.Measure();
+        if (rigLayer >= 0) { SetLayer(box.gameObject, boxLayer); }
+
+        //  2) 카메라 순서 --> faceRatios 순서
+        for (int i = 0; i < FaceCameraRig.FaceCount; i++)
+            { box.faceRatios[(int)FaceCameraRig.CapturedFaces[i]] = ratios[i]; }
+        box.judgedFace = faceRig.JudgeFace(ratios);
+
+        //  3) 로그. 송장이 있는 상자는 실제 송장 방향(LabelFaceNow)과 비교해, 판정이 다르면 경고한다 (테스트 확인용)
+        string text = $"{box.boxId} 측정 | 판정 {box.judgedFace} | " +
+                      $"위 {box.faceRatios[0]:0.000} · 앞 {box.faceRatios[1]:0.000} · 뒤 {box.faceRatios[2]:0.000} · " +
+                      $"왼 {box.faceRatios[3]:0.000} · 오 {box.faceRatios[4]:0.000}";
+        BoxFace actual = box.LabelFaceNow;
+        if (actual != BoxFace.None && actual != box.judgedFace)
+        { Debug.LogWarning($"[Cell] {text} | 실제 {actual} (판정 불일치)", this); }
+        else { Debug.Log($"[Cell] {text}", this); }
+        return true;
+    }
+
+    //  행동 선택: 위로 올릴 면을 돌려준다. Top이면 완료.
+    /// 기본 제어: 카메라 판정(judgedFace)을 그대로 쓴다. 이미 뒤집었는데 또 Bottom이면 송장이 없는 상자로 보고 완료로 둔다.
+    BoxFace ChooseFace(BoxInfo box)
+    {
+                        /////   : TODO :
+        //  [CorrectionAgent 구현 후] Mode == ControlMode.Policy면 correctionAgent.Decide(box)로 고른 면을 쓴다.
+        if (box.judgedFace == BoxFace.Bottom && box.flipped) { return BoxFace.Top; }
+        return box.judgedFace;
+    }
+
+                        /////   : TODO :
+    //  [자리 표시] 올릴 면이 위로 오게 상자를 그 자리에서 바로 돌리고, 로봇 동작 시간만큼 기다린다.
+    /// 바닥 높이는 그대로 두고 중심 높이만 다시 맞춘다 (5*6*7cm 상자는 눕히면 높이가 바뀐다).
+    /// [CorrectionSequence 연결 후] 이 함수를 지운다.
+    IEnumerator RotateInPlace(BoxInfo box, BoxFace face)
+    {
+        Transform boxTransform = box.transform;
+        float bottom = boxTransform.position.y - ConveyorLine.HalfSize(box, Vector3.up);
+
+        boxTransform.rotation = Quaternion.FromToRotation(BoxInfo.FaceDirection(face), Vector3.up) * boxTransform.rotation;
+        Vector3 position = boxTransform.position;
+        position.y = bottom + ConveyorLine.HalfSize(box, Vector3.up);
+        boxTransform.position = position;
+
+        //  kinematic 상자는 물리 엔진 쪽 위치 · 회전도 같이 맞춘다 (ConveyorLine은 Rigidbody 위치로 잰다)
+        Rigidbody body = box.GetComponent<Rigidbody>();
+        if(body != null)
+        {
+            body.position = position;
+            body.rotation = boxTransform.rotation;
+        }
+
+        Debug.Log($"[Cell] 회전 (자리 표시) | {box.boxId} | {face} 면을 위로", this);
+        yield return new WaitForSeconds(face == BoxFace.Bottom ? 2f : 1f);          // 바닥면은 90° 두 번
+    }
+
+    //  카메라 리그가 보는 레이어 (Culling Mask에서 켜진 첫 레이어).
+    /// 모든 레이어를 보거나 켜진 레이어가 없으면 -1 (상자 레이어를 바꾸지 않는다).
+    int RigLayer()
+    {
+        if (faceRig.SeesEverything) { return -1; }
+
+        int mask = faceRig.CullingMask.value;
+        for (int layer = 0; layer < 32; layer++)
+            if ((mask & (1 << layer)) != 0) { return layer; }
+        return -1;
+    }
+
+    //  상자와 그 아래 오브젝트(꺼진 것 포함)의 레이어를 모두 바꾼다.
+    static void SetLayer(GameObject root, int layer)
+    {
+        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            { child.gameObject.layer = layer; }
     }
 
     // 판독 스테이션: 도착 대기 → 판독 → 검증 → box.destination 기록 → 분류 구간으로 이송    (FR-04, FR-07)
@@ -376,11 +542,9 @@ public class CellController : MonoBehaviour
             box.state = BoxState.Reading;
             Debug.Log($"[Cell] 판독 스테이션 도착 | {box.boxId} | 교정 -> 판독 {box.readArriveTime - box.correctArriveTime:F1}초", this);
 
-            //  2) 판독 · 검증
-            ///// : TODO :
-            //  [Label ML 준비 완료 후] reader.Read(box) -> LabelValidator.Validate -> box.destination 기록.
-            //  지금은 자리 표시(작업 시간 1초 흉내)만 둔다.
-            yield return new WaitForSeconds(1f);
+            //  2) 실제 OCR · 규칙 검증. 미연결은 성공으로 처리하지 않는다.
+            if (reader != null) yield return reader.Read(box);
+            else { box.Mark(ExceptionReason.ReadFail); Debug.LogError("[Cell] LabelReader가 연결되지 않았습니다.", this); }
             if (!IsRunning) { yield break; }
 
             //  3) 분류 구간으로 보낸다
@@ -401,11 +565,30 @@ public class CellController : MonoBehaviour
         string missing = settings == null ? "Settings"
                        : correctLine == null ? "Correct Line"
                        : readLine == null ? "Read Line"
+                       : feeder == null ? "Feeder"
+                       : faceRig == null ? "Face Rig"
                        : null;
-        if (missing == null) { return true; }
+        if (missing != null) 
+        { 
+            Debug.LogWarning($"[Cell] {missing} 칸이 비어 있어 운전을 시작하지 않습니다.", this);
+            return false;
+        }
 
-        Debug.LogWarning($"[Cell] {missing} 칸이 비어 있어 운전을 시작하지 않습니다.", this);
-        return false;
+        //  카메라 리그: 카메라 5대가 없으면 시작하지 않는다. 모든 레이어를 보면 경고만 한다
+        if(!faceRig.IsBuilt)
+        {
+            Debug.LogWarning("[Cell] Face Rig에 카메라가 없습니다. FaceCameraRig의 '카메라 5대 배치 / 갱신' 버튼을 누르세요.", faceRig);
+            return false;
+        }
+        if (faceDetector != null && !faceDetector.ValidateConfiguration(out string modelError))
+        { Debug.LogWarning("[Cell] ONNX 준비 실패: " + modelError, this); return false; }
+        if(faceRig.SeesEverything)
+        {
+            Debug.LogWarning(
+                "[Cell] Face Rig가 모든 레이어를 봅니다. 벨트 · 로봇까지 찍혀 판정이 틀립니다. '상자 레이어(ScanTarget)만 보기' 버튼을 누르세요.", 
+                faceRig);
+        }
+        return true;
     }
 
     // Console에 남기는 집계 요약

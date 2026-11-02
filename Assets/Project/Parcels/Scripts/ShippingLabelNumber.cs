@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 [ExecuteAlways, DisallowMultipleComponent]
 public class ShippingLabelNumber : MonoBehaviour
@@ -17,6 +17,7 @@ public class ShippingLabelNumber : MonoBehaviour
     void OnEnable() { Refresh(); }
     void Start()
     {
+        if (Application.isPlaying) LabelTextOcclusion.Prepare(gameObject);
         if (Application.isPlaying && randomizeOnStart) code = (LabelCode)((Random.Range(0, 3) + 1) * 10);
         Refresh();
     }
