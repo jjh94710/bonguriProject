@@ -5,7 +5,7 @@ using UnityEngine;
 
 // Owns IK, path sampling and articulation drive execution. No parcel task sequence lives here.
 [DefaultExecutionOrder(-1000), DisallowMultipleComponent]
-public sealed class ArmIK : MonoBehaviour
+public sealed class BackArmIK : MonoBehaviour
 {
     public Transform tcp;
     [Min(0)] public float raisedElbowClearance;

@@ -4,11 +4,11 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-// Suction attachment and the configured-slot loading operation. ArmIK owns all robot motion.
-[DefaultExecutionOrder(-1000), RequireComponent(typeof(ArmIK)), DisallowMultipleComponent]
+// Suction attachment and the configured-slot loading operation. BackArmIK owns all robot motion.
+[DefaultExecutionOrder(-1000), RequireComponent(typeof(BackArmIK)), DisallowMultipleComponent]
 public sealed class BoxAttacher : MonoBehaviour
 {
-    public ArmIK armIK;
+    public BackArmIK armIK;
     public TotoBase toto;
     public Transform tcp, suctionCup, container;
     public BoxCollider targetBox;
@@ -58,18 +58,18 @@ public sealed class BoxAttacher : MonoBehaviour
     readonly List<(ArticulationBody body, bool gravity)> gravityStates = new List<(ArticulationBody, bool)>();
     void Awake()
     {
-        if (armIK == null) armIK = GetComponent<ArmIK>();
+        if (armIK == null) armIK = GetComponent<BackArmIK>();
         var colliders=GetComponentsInChildren<Collider>();
         for(int i=0;i<colliders.Length;i++)for(int j=i+1;j<colliders.Length;j++)
             if(!Physics.GetIgnoreCollision(colliders[i],colliders[j])) { Physics.IgnoreCollision(colliders[i],colliders[j],true);selfPairs.Add((colliders[i],colliders[j])); }
         foreach(var body in GetComponentsInChildren<ArticulationBody>()){gravityStates.Add((body, body.useGravity));body.useGravity=false;body.solverIterations=60;body.solverVelocityIterations=20;body.maxJointVelocity=4f;}
         if (tcp != null) { Configure(); armIK.Initialize(readyAngles); }
-        // Drive targets are configured by ArmIK.Initialize. Directly replacing the
+        // Drive targets are configured by BackArmIK.Initialize. Directly replacing the
         // root reduced-space arrays here can crash the Unity 6 PhysX solver.
     }
     IEnumerator Start()
     {
-        if (armIK == null) armIK = GetComponent<ArmIK>();
+        if (armIK == null) armIK = GetComponent<BackArmIK>();
         if (tcp == null || suctionCup == null || slots == null || slots.Length == 0 || slots.Any(s => s == null))
         { Status = "TCP / 흡착컵 / 적재 슬롯을 연결하세요."; yield break; }
         pickupCentre = targetBox == null ? tcp.position : targetBox.bounds.center;

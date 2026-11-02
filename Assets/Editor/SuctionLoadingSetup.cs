@@ -24,7 +24,7 @@ using UnityEngine;
  var robot=UnityEngine.Object.FindObjectsByType<Transform>().Where(t=>t.name.StartsWith("fr5_suction")&&t.GetComponentsInChildren<ArticulationBody>().Length>6).OrderBy(t=>Vector3.Distance(t.position,bin.transform.position)).First();
  var scene=robot.gameObject.scene;string backup=System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments) + "/UnityBackups/bonguriProject/SuctionLoading/"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+"/bongyuri.unity";Directory.CreateDirectory(Path.GetDirectoryName(backup));if(!EditorSceneManager.SaveScene(scene,backup,true))throw new Exception("Backup failed");
  var tcp=robot.GetComponentsInChildren<Transform>().First(t=>t.name=="tcp");var cup=robot.GetComponentsInChildren<Transform>().First(t=>t.name=="suction_cup_link");
- var ik=robot.GetComponent<ArmIK>();if(ik==null)ik=Undo.AddComponent<ArmIK>(robot.gameObject);
+ var ik=robot.GetComponent<BackArmIK>();if(ik==null)ik=Undo.AddComponent<BackArmIK>(robot.gameObject);
  var attacher=robot.GetComponent<BoxAttacher>();if(attacher==null)attacher=Undo.AddComponent<BoxAttacher>(robot.gameObject);
  var old=robot.GetComponent<CorrectionSequence>();if(old!=null){Undo.RecordObject(old,"Disable finger sequence on suction robot");old.enabled=false;}
  Undo.RecordObject(attacher,"Configure suction loading");Undo.RecordObject(ik,"Configure suction IK");ik.tcp=tcp;attacher.armIK=ik;attacher.tcp=tcp;attacher.suctionCup=cup;attacher.container=bin.transform;attacher.targetBox=box.GetComponent<BoxCollider>();

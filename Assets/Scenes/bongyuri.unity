@@ -7537,7 +7537,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0f1cc9a30197429bb1ef717b0d7c9b76, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ArmIK
+  m_EditorClassIdentifier: Assembly-CSharp::BackArmIK
   tcp: {fileID: 1185809769}
   raisedElbowClearance: 0.1
   minimumWristPlane: 0.865037
@@ -32899,7 +32899,7 @@ MonoBehaviour:
   - -89.96829
   - -86.548805
   status: "Play \uD6C4 \uC774\uB3D9 \uBC84\uD2BC\uC744 \uB204\uB974\uC138\uC694."
-  armIK: {fileID: 0}
+  armIK: {fileID: 1430163191}
   placementSurface: {fileID: 0}
 --- !u!114 &1430163191
 MonoBehaviour:
@@ -32910,9 +32910,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1430163186}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0f1cc9a30197429bb1ef717b0d7c9b76, type: 3}
+  m_Script: {fileID: 11500000, guid: a53832c73a01463b9158b9f8155af24c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ArmIK
+  m_EditorClassIdentifier: Assembly-CSharp::FrontArmIK
   tcp: {fileID: 0}
   raisedElbowClearance: 0
   minimumWristPlane: -10000
@@ -40598,7 +40598,7 @@ MonoBehaviour:
   parcelGripCloseAmount: 0.025
   initialJointAngles: []
   status: "Play \uD6C4 \uC774\uB3D9 \uBC84\uD2BC\uC744 \uB204\uB974\uC138\uC694."
-  armIK: {fileID: 0}
+  armIK: {fileID: 1749693319}
   placementSurface: {fileID: 0}
 --- !u!114 &1749693319
 MonoBehaviour:
@@ -40609,9 +40609,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 880840826}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0f1cc9a30197429bb1ef717b0d7c9b76, type: 3}
+  m_Script: {fileID: 11500000, guid: a53832c73a01463b9158b9f8155af24c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ArmIK
+  m_EditorClassIdentifier: Assembly-CSharp::FrontArmIK
   tcp: {fileID: 0}
   raisedElbowClearance: 0
   minimumWristPlane: -10000
@@ -46723,7 +46723,7 @@ MonoBehaviour:
   parcelGripCloseAmount: 0.025
   initialJointAngles: []
   status: "Play \uD6C4 \uC774\uB3D9 \uBC84\uD2BC\uC744 \uB204\uB974\uC138\uC694."
-  armIK: {fileID: 0}
+  armIK: {fileID: 1952875734}
   placementSurface: {fileID: 0}
 --- !u!114 &1952875734
 MonoBehaviour:
@@ -46734,9 +46734,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1952875729}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0f1cc9a30197429bb1ef717b0d7c9b76, type: 3}
+  m_Script: {fileID: 11500000, guid: a53832c73a01463b9158b9f8155af24c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ArmIK
+  m_EditorClassIdentifier: Assembly-CSharp::FrontArmIK
   tcp: {fileID: 0}
   raisedElbowClearance: 0
   minimumWristPlane: -10000

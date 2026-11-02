@@ -5,7 +5,7 @@ using System.Linq;
 using UnityEngine;
 
 // The solver operates on a mathematical copy. Only articulation drive targets move the real arm.
-[DefaultExecutionOrder(-1000), DisallowMultipleComponent, RequireComponent(typeof(ArmIK))]
+[DefaultExecutionOrder(-1000), DisallowMultipleComponent, RequireComponent(typeof(FrontArmIK))]
 public class CorrectionSequence : MonoBehaviour
 {
     public enum ParcelFace { [InspectorName("앞면 (+Z)")] Front, [InspectorName("뒷면 (-Z)")] Back,
@@ -31,15 +31,15 @@ public class CorrectionSequence : MonoBehaviour
     [SerializeField, Tooltip("Start angles in degrees: shoulder, upperarm, forearm, wrist1, wrist2, wrist3")] float[] initialJointAngles;
     [SerializeField] string status = "Play 후 이동 버튼을 누르세요.";
     public string Status => status;
-    [SerializeField] ArmIK armIK;
-    public ArmIK Arm => Motion;
-    ArmIK Motion
+    [SerializeField] FrontArmIK armIK;
+    public FrontArmIK Arm => Motion;
+    FrontArmIK Motion
     {
         get
         {
-            if (armIK == null) armIK = GetComponent<ArmIK>();
-            if (armIK == null && Application.isPlaying) armIK = gameObject.AddComponent<ArmIK>();
-            if (armIK == null) throw new InvalidOperationException("ArmIK component is missing.");
+            if (armIK == null) armIK = GetComponent<FrontArmIK>();
+            if (armIK == null && Application.isPlaying) armIK = gameObject.AddComponent<FrontArmIK>();
+            if (armIK == null) throw new InvalidOperationException("FrontArmIK component is missing.");
             armIK.Configure(tcp, targetBox, degreesPerSecond, metresPerSecond, positionTolerance, angleTolerance, boxClearance, compensateRobotGravity);
             return armIK;
         }
@@ -195,7 +195,8 @@ public class CorrectionSequence : MonoBehaviour
         try
         {
             model = new ArmKinematics(transform, tcp);
-            Hold();
+            // FrontArmIK already applies holding force and ready targets in Awake.
+            // Do not capture a transient first-step pose over the saved ready targets.
             status = sideGrasp ? "준비 완료 · 박스 옆으로 이동을 누르세요." : "준비 완료 · 박스 위로 이동을 누르세요.";
         }
         catch (Exception e) { status = e.Message; Debug.LogError("CorrectionSequence: " + e.Message, this); }
