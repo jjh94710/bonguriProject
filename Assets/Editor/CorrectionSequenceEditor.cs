@@ -16,8 +16,6 @@ public class CorrectionSequenceEditor : Editor
         EditorGUILayout.Space();
         if (Application.isPlaying)
             EditorGUILayout.LabelField("회전 단계 / 내려놓기 완료", arm.CurrentRotationStage + " / " + arm.CompletedQuarterTurns);
-        if (Application.isPlaying)
-            EditorGUILayout.LabelField("실제 손가락 높이 차이", (arm.JawHeightDifference() * 1000).ToString("F1") + " mm");
         EditorGUILayout.HelpBox(arm.Status, MessageType.Info);
         EditorGUILayout.HelpBox("Face To Raise에서 면 선택 후 자동 버튼을 누르세요. 월드 +Z 앞, -Z 뒤, -X 왼쪽, +X 오른쪽이며 분홍 화살표가 선택 면입니다. 옆면 네 방향은 선택한 면을 직접 위로 90도 올립니다. 밑면만 두 단계로 뒤집습니다. 수동: 1 → 2 → 그리퍼 닫기 → 3 → 4 → 5 순서로 실행하세요. 각 동작이 끝난 뒤 다음 버튼을 누르세요. 경로상의 모든 장애물을 자동으로 피하는 기능은 포함되어 있지 않습니다.", MessageType.None);
         using (new EditorGUI.DisabledScope(!Application.isPlaying))

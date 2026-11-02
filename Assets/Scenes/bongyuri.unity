@@ -6704,7 +6704,7 @@ GameObject:
   - component: {fileID: 291876255}
   - component: {fileID: 291876254}
   m_Layer: 0
-  m_Name: SeparatorB
+  m_Name: SeparatorA
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6718,13 +6718,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 291876252}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
   m_LocalPosition: {x: -1.6440809, y: 0.93125933, z: 2.5462546}
   m_LocalScale: {x: 0.77658, y: 0.14202, z: 0.01}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1864491003}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
 --- !u!114 &291876254
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6737,29 +6737,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 74f7c3a228c11d04183fde3bc4da0609, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoxPusher
-  mode: 0
-  collectionBin: {fileID: 0}
-  collectionCenter: {x: 0, y: 0, z: 0}
-  collectionSize: {x: 0, y: 0, z: 0}
-  sourceConveyor: {fileID: 0}
-  dropTimeout: 5
-  onRejectComplete:
-    m_PersistentCalls:
-      m_Calls: []
-  parcel: {fileID: 937953551}
-  receiver: {fileID: 227911616}
-  oppositeSeparator: {fileID: 551057184}
-  startReceiverAfterReturn: 0
-  direction: {x: 0, y: 0, z: -1}
-  receiverCenter: {x: -1.6176144, y: 0.6126241, z: 0.36725774}
-  receiverSize: {x: 0.9221203, y: 0.49727046, z: 2.6623456}
-  pushSpeed: 0.08
-  returnSpeed: 0.15
-  maxTravel: 1.0078241
-  onTransferComplete:
-    m_PersistentCalls:
-      m_Calls: []
-  status: "\uC900\uBE44 \xB7 Play \uD6C4 \uBC00\uAE30 \uC2DC\uC791"
+  target: 1
+  divertPoint: {fileID: 0}
+  pusherHead: {fileID: 0}
+  toLine: {fileID: 0}
+  pushDistance: 0.25
+  pushDuration: 0.6
+  waitLimit: 10
+  showTestButtons: 0
+  guiPosition: {x: 510, y: 10}
 --- !u!54 &291876255
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -8537,7 +8523,7 @@ GameObject:
   - component: {fileID: 352732708}
   - component: {fileID: 352732707}
   m_Layer: 0
-  m_Name: SeparatorC
+  m_Name: SeparatorNG
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8551,13 +8537,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 352732705}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
   m_LocalPosition: {x: -0.3740809, y: 0.93125933, z: 2.5462546}
   m_LocalScale: {x: 0.77658, y: 0.14202, z: 0.01}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1864491003}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
 --- !u!114 &352732707
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8570,29 +8556,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 74f7c3a228c11d04183fde3bc4da0609, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoxPusher
-  mode: 1
-  collectionBin: {fileID: 1796455243}
-  collectionCenter: {x: -0.3740809, y: 0.4, z: 1.3}
-  collectionSize: {x: 0.81, y: 0.48, z: 0.68}
-  sourceConveyor: {fileID: 0}
-  dropTimeout: 5
-  onRejectComplete:
-    m_PersistentCalls:
-      m_Calls: []
-  parcel: {fileID: 883096287}
-  receiver: {fileID: 0}
-  oppositeSeparator: {fileID: 0}
-  startReceiverAfterReturn: 0
-  direction: {x: 0, y: 0, z: -1}
-  receiverCenter: {x: -1.6176144, y: 0.6126241, z: 0.36725774}
-  receiverSize: {x: 0.9221203, y: 0.49727046, z: 2.6623456}
-  pushSpeed: 0.08
-  returnSpeed: 0.15
-  maxTravel: 1.16
-  onTransferComplete:
-    m_PersistentCalls:
-      m_Calls: []
-  status: "\uC900\uBE44 \xB7 Play \uD6C4 \uBC00\uAE30 \uC2DC\uC791"
+  target: 4
+  divertPoint: {fileID: 0}
+  pusherHead: {fileID: 0}
+  toLine: {fileID: 0}
+  pushDistance: 0.25
+  pushDuration: 0.6
+  waitLimit: 10
+  showTestButtons: 0
+  guiPosition: {x: 510, y: 10}
 --- !u!54 &352732708
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -12012,7 +11984,7 @@ GameObject:
   - component: {fileID: 551057186}
   - component: {fileID: 551057185}
   m_Layer: 0
-  m_Name: SeparatorA
+  m_Name: SeparatorC
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -12030,29 +12002,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 74f7c3a228c11d04183fde3bc4da0609, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoxPusher
-  mode: 0
-  collectionBin: {fileID: 0}
-  collectionCenter: {x: 0, y: 0, z: 0}
-  collectionSize: {x: 0, y: 0, z: 0}
-  sourceConveyor: {fileID: 0}
-  dropTimeout: 5
-  onRejectComplete:
-    m_PersistentCalls:
-      m_Calls: []
-  parcel: {fileID: 937953551}
-  receiver: {fileID: 1266632490}
-  oppositeSeparator: {fileID: 291876252}
-  startReceiverAfterReturn: 0
-  direction: {x: 0, y: 0, z: 1}
-  receiverCenter: {x: -1.6705474, y: 0.6126241, z: 3.8824275}
-  receiverSize: {x: 0.9221203, y: 0.49727046, z: 2.6623456}
-  pushSpeed: 0.08
-  returnSpeed: 0.15
-  maxTravel: 1.0078242
-  onTransferComplete:
-    m_PersistentCalls:
-      m_Calls: []
-  status: "\uC900\uBE44 \xB7 Play \uD6C4 \uBC00\uAE30 \uC2DC\uC791"
+  target: 3
+  divertPoint: {fileID: 0}
+  pusherHead: {fileID: 0}
+  toLine: {fileID: 0}
+  pushDistance: 0.25
+  pushDuration: 0.6
+  waitLimit: 10
+  showTestButtons: 0
+  guiPosition: {x: 510, y: 10}
 --- !u!54 &551057186
 Rigidbody:
   m_ObjectHideFlags: 0

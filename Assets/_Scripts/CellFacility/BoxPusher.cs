@@ -1,286 +1,246 @@
+using System.Collections;
 using UnityEngine;
-using UnityEngine.Events;
-using UnityEngine.Serialization;
-using RoboLacyTech.Conveyors;
 
 //  ============================================================
 //  BoxPusher
-//  분기 판(푸셔). 판을 물리로 밀어 벨트 위 상자 1개를 옆 벨트로 넘기거나(ConveyorTransfer) 수거함으로 떨어뜨린다(RejectToBin).
-//      - 판은 kinematic Rigidbody이고, MovePosition으로 움직여 상자를 실제 충돌로 민다.
-//      - 동작 단계(state): 0 대기 · 1 밀기 · 2 도착 후 잠깐 정지 · 3 복귀 · 4 정지(재설정 필요) · 5 수거함 낙하 확인
-//      - 시작: BeginPush()(밀기) · BeginReject()(불량 배출, RejectToBin 모드만) · ReportInspection()(검사 결과로 배출)
+//  분류 구간의 분기 지점에서, 목적지가 담당(target)인 상자를 옆 벨트나 NG 쪽으로 밀어내는 푸셔.
+//      - 분기 지점마다 하나씩 둔다 (NG, A, C). 목적지가 B인 상자는 아무도 밀지 않아 그대로 직진한다.
+//      - 상자가 분기 지점에 오면 ConveyorLine이 TryPush()를 부른다. 담당이면 구간에서 빼고(TakeAway) 밀기 시작.
+//      - 판과 상자를 스크립트로 함께 옮긴다. 벨트(ConveyorLine)와 같은 방식이라 상자는 kinematic 그대로다.
+//      - 다 밀면 toLine.Feed(box)로 옆 벨트에 넘기고, 판을 원위치로 되돌린다.
 //
-//  [사용] 판 오브젝트에 붙인다. 밀 상자(parcel), 도착 벨트(receiver) 또는 수거함, 도착 · 수거 확인 영역(월드 좌표)을 Inspector에서 넣는다.
+//  [사용] 빈 오브젝트 "Pusher_A" 등에 붙이고, 판(Head)과 분기 지점(DivertPoint)을 자식으로 둔다.
+//         이 오브젝트의 앞쪽(파란 화살표, +Z)이 미는 방향이다.
+//         분류 구간 ConveyorLine의 Pushers 칸에 상자가 지나가는 순서대로 넣는다 (NG → A → C).
+//  [!] 판은 충돌로 밀지 않는다. 판에 Collider가 있어도 상자 이동에는 영향이 없다.
 //
 //  [설계서와의 차이]
-//      * 설계서는 상자가 분기 지점에 오면 ConveyorLine이 TryPush(line, box)를 부르고, box.destination이 담당 목적지(target)면 민다.
-//        여기는 담당 목적지 · TryPush가 없고, 밀 상자를 parcel 칸 하나로 받는다 (상자마다 누가 넣어 줘야 한다).
-//      * 벨트가 RoboLacyTech LinearConveyor(실물 마찰 벨트)다. 공정 벨트 ConveyorLine은 상자를 kinematic으로 스크립트 이동하므로,
-//        판이 상자를 밀려면 ConveyorLine.Take(box) → 상자 물리 켜기가 먼저 필요하다 (kinematic끼리는 충돌로 밀리지 않는다).
-//      * 밀어낸 뒤 toLine.Feed(box) · toTote.Add(box)로 넘기는 연결과 PushedCount가 없다.
-//      * 불량 판단을 ReportInspection(송장 있음, 이름 일치)으로 받는다 (설계서: 판독 스테이션이 정한 box.destination == NG만 본다).
-//
-//  [점검 11/02] develop 코드 그대로 두고 주석만 달았다. 문제 소지는 [주의], 설계서와 다른 곳은 [설계서와의 차이].
+//      * 미는 방향은 이 오브젝트의 앞쪽(+Z)으로 정한다 (설계서에 칸 없음).
+//      * pushDuration은 판이 끝까지 나가는 시간이다. 돌아올 때도 같은 속도로 온다.
+//      * 받을 벨트 입구가 차 있으면 밀지 않는다. ConveyorLine이 상자를 분기 지점에 세워 두고, waitLimit을 넘기면 "분류 실패"로 지나가게 한다.
+//      * 박봉현님 10/30 BoxPusher(실물 벨트 · 물리 밀기 · 수거함 모드)를 이 방식으로 바꿨다.
 //  ============================================================
-[RequireComponent(typeof(Rigidbody)), DisallowMultipleComponent]
 public class BoxPusher : MonoBehaviour
 {
-    //  ---------------- 모드 ----------------
-    /// ConveyorTransfer: 옆 벨트로 넘김 / RejectToBin: 수거함으로 떨어뜨림
-    public enum PusherMode { ConveyorTransfer, RejectToBin }
-    public PusherMode mode;
+    //  ---------------- 담당 · 연결 ----------------    (FR-08, FR-09)
+    [Header("담당 · 연결")]
+    [Tooltip("담당 목적지. 이 목적지의 상자만 민다 (NG, A, C)")]
+    [SerializeField] Destination target = Destination.NG;
 
-    //  ---------------- 불량 배출 (RejectToBin) ----------------
-    /// 수거함 (있어야 시작) / 수거 확인 영역 중심 · 크기 (월드 좌표)
-    [Header("불량 배출")]
-    public Transform collectionBin;
-    public Vector3 collectionCenter, collectionSize;
-    /// 밀기 시작할 때 멈출 원래 벨트. [주의] 다시 켜는 곳이 없다
-    public LinearConveyor sourceConveyor;
-    /// 수거함에 들어갔는지 기다리는 최대 시간(초)
-    [Min(1f)] public float dropTimeout = 5f;
-    [Tooltip("수거함 확인 시 한 번 호출됩니다.")]
-    public UnityEvent onRejectComplete;
-    // 수거 확인 실패 여부
-    bool rejectFailed;
+    [Tooltip("분기 지점. 분류 구간 벨트 가운데, 상자를 세워 밀 자리에 둔다")]
+    [SerializeField] Transform divertPoint;
 
-    //  ---------------- 옆 벨트로 넘기기 (ConveyorTransfer) ----------------
-    /// 밀 상자. [설계서와의 차이] 상자마다 바꿔 넣어야 한다 (두 모드 공통)
-    public BoxCollider parcel;
-    /// 도착 벨트 (LinearConveyor). Start()와 밀기 시작 때 멈춘다
-    public LinearConveyor receiver;
-    /// 반대쪽 판. 미는 동안 오브젝트를 꺼 두고 복귀 뒤 되돌린다. 비어 있으면 이름("SeparatorA" ↔ "SeparatorB")으로 찾는다
-    [FormerlySerializedAs("separatorA")] public GameObject oppositeSeparator;
-    /// 복귀 뒤 도착 벨트를 다시 돌릴지 (default: 끔)
-    public bool startReceiverAfterReturn = false;
-    /// 미는 방향 (월드 축, default: −Z) / 도착 확인 영역 중심 · 크기 (월드 좌표)
-    public Vector3 direction = Vector3.back;
-    public Vector3 receiverCenter, receiverSize;
-    /// 미는 · 복귀 속도 m/s, 최대 이동 거리 m (default: 0.08 · 0.15 · 1.05)
-    [Min(.01f)] public float pushSpeed = .08f, returnSpeed = .15f;
-    [Min(.01f)] public float maxTravel = 1.05f;
-    /// 넘기기 성공 때 한 번 (수거 성공 때도 함께 부른다)
-    public UnityEvent onTransferComplete;
+    [Tooltip("판 (밀기 · 복귀 때 움직이는 막대). 비우면 이 오브젝트를 움직인다")]
+    [SerializeField] Transform pusherHead;
 
-    //  ---------------- 상태 ----------------
-    /// 상태 글자 / 동작 중(1 · 2 · 3 · 5단계) / 마지막 동작 성공 / 상자가 도착 영역에 들어갔는지
-    [SerializeField] string status = "준비 · Play 후 밀기 시작";
-    public string Status => status;
-    public bool Busy => state == 1 || state == 2 || state == 3 || state == 5;
-    public bool Completed { get; private set; }
-    public bool Delivered { get; private set; }
-    // body 판 Rigidbody / home 처음 위치 / state 동작 단계 / timer 단계별 시간 / 반대쪽 판을 꺼 뒀는지 · 그 충돌체
-    Rigidbody body; Vector3 home; int state; float timer;
-    bool separatorWasActive, separatorSuppressed;
-    Collider[] separatorColliders;
+    [Tooltip("(선택) 밀어낸 상자를 넘길 벨트 (LaneA, LaneC). 입구를 밀린 상자가 멈추는 자리(노란 선 끝)에 둔다")]
+    [SerializeField] ConveyorLine toLine;
+
+    ///// : TODO :
+    //  [ToteBase 구현 후] toTote (ToteBase) 칸을 연다. NG 상자는 toTote.Add(box)로 넣는다.
+
+    //  ---------------- 동작 ----------------
+    [Header("동작")]
+    [Tooltip("상자를 미는 거리 m. 분기 지점에서 받을 벨트 입구까지 (default: 0.25)")]
+    [Min(0.01f)][SerializeField] float pushDistance = 0.25f;
+
+    [Tooltip("판이 끝까지 나가는 시간(초). 돌아올 때도 같은 속도 (default: 0.6)")]
+    [Min(0.05f)][SerializeField] float pushDuration = 0.6f;
+
+    [Tooltip("받을 벨트가 차 있을 때 상자를 분기 지점에 세워 두는 최대 시간(초). 넘으면 \"분류 실패\"로 지나간다 (default: 10)")]
+    [Min(0f)][SerializeField] float waitLimit = 10f;
+
+    //  ---------------- 테스트 ----------------
+    [Header("테스트")]
+    [Tooltip("켜면 화면에 테스트 패널을 그린다")]
+    [SerializeField] bool showTestButtons = false;
+
+    [Tooltip("테스트 패널 위치 (x, y). 다른 패널과 겹치지 않게 바꾼다")]
+    [SerializeField] Vector2 guiPosition = new Vector2(510, 10);
+
+
+    //  ============================================================
+    //  상태 (ConveyorLine · 대시보드가 읽는 값)
+    //  ============================================================
+    /// 밀기 동작 중 (판이 나갔다가 돌아올 때까지). 이 동안 ConveyorLine은 다음 상자를 분기 지점에 세운다
+    public bool IsPushing { get; private set; }
+
+    /// 밀어낸 상자 수 (대시보드 표시)
+    public int PushedCount { get; private set; }
+
+    /// 분기 지점 (ConveyorLine이 이 위치까지의 거리를 잰다)
+    public Transform DivertPoint => divertPoint;
+
+    /// 받을 벨트가 찼을 때 상자를 세워 두는 최대 시간(초)
+    public float WaitLimit => waitLimit;
+
+    /// 움직일 판 (비어 있으면 이 오브젝트)
+    Transform Head => pusherHead != null ? pusherHead : transform;
+
+    /// 미는 방향 (이 오브젝트의 앞쪽, 수평 단위 벡터)
+    Vector3 PushDirection
+    {
+        get
+        {
+            Vector3 direction = transform.forward;
+            direction.y = 0f;
+            return direction.normalized;
+        }
+    }
 
 
     //  ============================================================
     //  시작
     //  ============================================================
-    // 판을 kinematic으로 두고 처음 위치를 기억한다. 반대쪽 판을 이름으로 찾는다 (ConveyorTransfer).
-    /// [주의] GameObject.Find로 이름이 정확히 "SeparatorA" · "SeparatorB"인 오브젝트를 찾는다. 이름이 다르면 못 찾고, 같은 이름이 여럿이면 아무거나 잡힌다.
-    void Awake()
+    // 칸 확인. 빠진 칸이 있어도 멈추지 않고 경고만 남긴다.
+    void Start()
     {
-        body = GetComponent<Rigidbody>(); 
-        body.isKinematic = true; 
-        body.useGravity = false;
-        body.interpolation = RigidbodyInterpolation.Interpolate;
-        body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
-        
-        home = body.position;
-        if (mode == PusherMode.ConveyorTransfer && oppositeSeparator == null)
-            { oppositeSeparator = GameObject.Find(name == "SeparatorA" ? "SeparatorB" : "SeparatorA"); }
-        if (oppositeSeparator != null)
-            { separatorColliders = oppositeSeparator.GetComponentsInChildren<Collider>(true); }
-    }
-    
-    // 도착 벨트를 멈춘 채로 시작한다.
-    void Start() 
-    {
-        if (receiver != null) { receiver.Stop(); }
+        if (divertPoint == null)
+        { Debug.LogWarning($"[Pusher] {name}: Divert Point가 비어 있습니다. 상자를 세우지도 밀지도 않습니다.", this); }
+
+        if (target == Destination.None || target == Destination.B)
+        { Debug.LogWarning($"[Pusher] {name}: Target이 {target}입니다. B는 직진이라 푸셔가 필요 없습니다. NG · A · C 중 하나로 바꾸세요.", this); }
+
+        if (toLine == null && target != Destination.NG)
+        { Debug.LogWarning($"[Pusher] {name}: To Line이 비어 있습니다. 밀어낸 상자는 지워집니다.", this); }
     }
 
 
     //  ============================================================
-    //  명령
+    //  명령 (ConveyorLine이 부른다)
     //  ============================================================
-    // 검사 결과를 받아, 송장이 없거나 이름이 맞지 않으면 불량 배출을 시작한다 (RejectToBin 모드만).
-    // Connect the inspection system here; perception itself is supplied by the caller.
-    /// [설계서와의 차이] 공정은 판독 스테이션이 box.destination을 NG로 정하고, 푸셔는 그 값만 본다.
-    public void ReportInspection(bool hasShippingLabel, bool labelNameMatches)
+    // 이 상자가 담당인지 (목적지 == target).
+    public bool WantsPushed(BoxInfo box)
     {
-        if (!hasShippingLabel || !labelNameMatches) { BeginReject(); }
-    }
-    
-    // 불량 배출 시작 (RejectToBin 모드일 때만 BeginPush()).
-    [ContextMenu("불량 가정 배출")]
-    public void BeginReject()
-    {
-        if (mode == PusherMode.RejectToBin) { BeginPush(); }
+        return box != null && box.destination == target;
     }
 
-    // 상자가 수거 확인 영역 안에 들어가 거의 멈췄는지 (속도 0.08 m/s 미만).
-    public bool ParcelInsideCollection()
+    // 분기 지점에 온 상자를 민다. 담당이 아니거나, 밀기 중이거나, 받을 벨트 입구가 차 있으면 false (상자는 그대로).
+    /// [호출] ConveyorLine.CarryRoutine() (상자가 분기 지점에 왔을 때)
+    /// 밀기로 하면 line.TakeAway(box)로 구간에서 빼고 PushRoutine()을 시작한다.
+    public bool TryPush(ConveyorLine line, BoxInfo box)
     {
-        if (parcel == null || collectionBin == null) { return false; }
-        
-        Bounds b = parcel.bounds, zone = new Bounds(collectionCenter, collectionSize);
-        var rb = parcel.attachedRigidbody;
-        return b.min.x >= zone.min.x && b.max.x <= zone.max.x && b.min.z >= zone.min.z && b.max.z <= zone.max.z
-            && b.min.y >= zone.min.y - .01f && b.max.y <= zone.max.y && rb != null && rb.linearVelocity.magnitude < .08f;
-    }
+        if (IsPushing || !WantsPushed(box)) { return false; }
+        if (toLine != null && !toLine.CanAccept) { return false; }
 
-    // 밀기 시작. 반대쪽 판이 동작 중이거나, 연결이 비었거나, 판이 원위치가 아니면 Status만 바꾸고 끝.
-    /// 원래 벨트 · 도착 벨트를 멈추고, 반대쪽 판을 끈 뒤 1단계(밀기)로.
-    /// [주의] 판이 상자를 미는 힘은 물리 충돌뿐이다. 상자가 kinematic이면 밀리지 않는다.
-    [ContextMenu("밀기 시작")]
-    public void BeginPush()
-    {
-        if (!Application.isPlaying || Busy) { return; }
-        
-        var otherPusher = oppositeSeparator == null ? null : oppositeSeparator.GetComponent<BoxPusher>();
-        if (otherPusher != null && otherPusher.Busy) 
-            { status = "반대쪽 판이 동작 중입니다."; return; }
-        if (parcel == null || (mode == PusherMode.ConveyorTransfer ? receiver == null : collectionBin == null) || direction.sqrMagnitude < .1f) 
-            { status = "박스 / 도착 벨트 / 방향을 확인하세요."; return; }
-        if (Vector3.Distance(body.position, home) > .01f) 
-            { status = "먼저 판을 원위치로 복귀시키세요."; return; }
-        if (sourceConveyor != null) 
-            { sourceConveyor.Stop(); }
-        if (receiver != null)
-            { receiver.Stop(); Completed = false; Delivered = false; rejectFailed = false; state = 1; timer = 0; }
-        if (oppositeSeparator != null && !separatorSuppressed)
-            { separatorWasActive = oppositeSeparator.activeSelf; oppositeSeparator.SetActive(false); separatorSuppressed = true; }
-        
-        status = mode == PusherMode.RejectToBin ? "불량 박스를 벨트 밖으로 미는 중" : "박스를 도착 벨트로 미는 중";
-    }
-
-    // 판을 원위치로 되돌린다 (3단계). 결과 값은 지운다.
-    public void ReturnHome()
-    {
-        if (!Application.isPlaying) { return; }
-        
-        Delivered = false; Completed = false; rejectFailed = false;
-        if (receiver != null) { receiver.Stop(); }
-
-        state = 3; status = "원위치 복귀 중";
-    }
-
-    // 그 자리에서 멈춘다 (4단계).
-    /// [주의] 반대쪽 판은 꺼진 채 남는다. ReturnHome()을 불러야 다시 쓸 수 있다.
-    public void Stop()
-    {
-        if (receiver != null)
-            { receiver.Stop(); state = 4; status = "정지 · 원위치 복귀로 재설정하세요."; }
-    }
-
-    // 상자가 도착 영역 안에 있는지. 밀 때(transferInset)는 상자가 들어오는 쪽 가장자리에서 12 cm 넘게 들어와야 도착으로 본다 (복귀 뒤 확인은 5 mm).
-    /// 바닥 높이는 영역 윗면 −4 ~ +6 cm 사이여야 한다.
-    /// [주의] 12 cm는 큰 벨트(폭 0.88 m) 기준이다. 폭 0.2 m 벨트와 5 × 6 × 7 cm 상자에서는 영역을 그만큼 넓게 잡아야 도착 판정이 난다.
-    public bool ParcelInsideReceiver(bool transferInset = true)
-    {
-        if (parcel == null) { return false; }
-
-        var b = parcel.bounds; var zone = new Bounds(receiverCenter, receiverSize);
-        float inset = transferInset ? .12f : .005f;
-        float minX = direction.x > .5f ? inset : .005f, maxX = direction.x < -.5f ? inset : .005f;
-        float minZ = direction.z > .5f ? inset : .005f, maxZ = direction.z < -.5f ? inset : .005f;
-        return b.min.x >= zone.min.x + minX && b.max.x <= zone.max.x - maxX &&
-            b.min.z >= zone.min.z + minZ && b.max.z <= zone.max.z - maxZ &&
-            b.min.y > zone.max.y - .04f && b.min.y < zone.max.y + .06f;
+        line.TakeAway(box);
+        StartCoroutine(PushRoutine(box));
+        return true;
     }
 
 
     //  ============================================================
-    //  동작 (물리 스텝마다)
+    //  밀기 (코루틴)
     //  ============================================================
-    // 1 밀기: 도착 영역에 들어가면 2로. 최대 거리나 시간(maxTravel ÷ pushSpeed + 5초)을 넘으면 RejectToBin은 5로, 아니면 정지(4)
-    // 5 낙하 확인 → 3 / 2 잠깐(0.3초) 멈춤 → 3 / 3 복귀: 원위치에 오면 0으로, 반대쪽 판을 되돌리고 성공 여부를 정한다
-    /// [주의] 1단계 시간 제한이 기본값으로 약 18초다.
-    /// [주의] 원래 벨트(sourceConveyor)는 끝나도 다시 켜지 않는다. 도착 벨트는 startReceiverAfterReturn이 켜져 있을 때만 다시 돈다.
-    void FixedUpdate()
+    // 판을 내밀어 상자를 pushDistance만큼 옮기고, 받을 벨트에 넘긴 뒤 판을 되돌린다.
+    /// 판이 상자 옆면에 닿은 뒤부터 상자가 같이 움직인다 (닿기 전 거리는 ContactGap()이 잰다).
+    /// box가 null이면 판만 움직인다 (테스트).
+    IEnumerator PushRoutine(BoxInfo box)
     {
-        if (state == 1)
+        IsPushing = true;
+        Transform head = Head;
+        Vector3 direction = PushDirection;
+        Vector3 home = head.position;
+
+        float contact = box != null ? ContactGap(box, direction) : 0f;
+        float travel = contact + pushDistance;
+        float speed = travel / pushDuration;
+
+        //  1) 판을 내민다. 판이 contact만큼 나간 뒤부터 상자도 같은 만큼 간다
+        for (float moved = 0f; moved < travel;)
         {
-            timer += Time.fixedDeltaTime;
-            if (mode == PusherMode.ConveyorTransfer && ParcelInsideReceiver()) 
-                { Delivered = true; state = 2; timer = 0; status = "박스 도착 · 판 정지"; return; }
-            if (Vector3.Distance(body.position, home) >= maxTravel || timer > maxTravel / pushSpeed + 5)
+            yield return new WaitForFixedUpdate();
+
+            float step = Mathf.Min(speed * Time.fixedDeltaTime, travel - moved);
+            moved += step;
+            head.position += direction * step;
+
+            float boxStep = Mathf.Clamp(moved - contact, 0f, step);
+            if (box != null && boxStep > 0f) { ConveyorLine.MoveBox(box, direction * boxStep); }
+        }
+
+        //  2) 받을 벨트에 넘긴다. 입구가 차 있으면 빌 때까지 기다린다 (TryPush()가 확인했으므로 보통 바로 넘어간다)
+        if (box != null)
+        {
+            PushedCount++;
+            if (toLine != null)
             {
-                if (mode == PusherMode.RejectToBin) 
-                    { state = 5; timer = 0; status = "수거함 낙하 확인 중"; return; }
-                Stop(); status = "도착 확인 실패 · 틈/턱 또는 박스 위치를 확인하세요."; return;
+                Debug.Log($"[Pusher] {name}: {box.boxId} 밀어냄 → {toLine.name} | 목적지 {box.destination}", this);
+                while (box != null && !toLine.Feed(box)) { yield return null; }
             }
-            body.MovePosition(
-                Vector3.MoveTowards(body.position, home + direction.normalized * maxTravel, pushSpeed * Time.fixedDeltaTime));
-        }
-        else if (state == 5)
-        {
-            timer += Time.fixedDeltaTime;
-            if (ParcelInsideCollection()) 
-                { Delivered = true; state = 3; status = "수거함 도착 확인 · 판 복귀 중"; }
-            else if (timer > dropTimeout) 
-                { rejectFailed = true; state = 3; status = "수거함 도착 확인 실패 · 판 복귀 중"; }
-        }
-        else if (state == 2)
-        {
-            timer += Time.fixedDeltaTime;
-            if (timer >= .3f) 
-                { state = 3; status = "판 원위치 복귀 중"; }
-        }
-        else if (state == 3)
-        {
-            body.MovePosition(Vector3.MoveTowards(body.position, home, returnSpeed * Time.fixedDeltaTime));
-            if (Vector3.Distance(body.position, home) < .001f)
+            else
             {
-                state = 0;
-                RestoreSeparator();
-                if (mode == PusherMode.RejectToBin)
-                {
-                    Completed = Delivered && !rejectFailed && ParcelInsideCollection();
-                    status = Completed ? "불량 배출 및 판 복귀 완료 · 수거함 안착 확인" : "불량 배출 실패 · 수거함과 낙하 경로를 확인하세요.";
-                    if (Completed) 
-                        { onRejectComplete?.Invoke(); onTransferComplete?.Invoke(); }
-                    return;
-                }
-                if (Delivered && ParcelInsideReceiver(false))
-                {
-                    if (startReceiverAfterReturn) { receiver.Play(); }
-                    else 
-                    { 
-                        receiver.Stop(); 
-                        Completed = true; 
-                        status = startReceiverAfterReturn ? "복귀 완료 · 도착 벨트 가동" : "이송 및 판 복귀 완료 · 도착 벨트 정지 유지"; 
-                        onTransferComplete?.Invoke(); 
-                    }
-                }
-                else { status = "원위치 복귀 완료 · 도착 벨트는 정지 상태"; }
+                ///// : TODO :
+                //  [ToteBase 구현 후] toTote.Add(box). 지금은 받을 곳이 없어 지운다 (다음 구간 없는 ConveyorLine 출구와 같음).
+                Debug.Log($"[Pusher] {name}: {box.boxId} 밀어냄 (받을 곳 없음, 지움) | 목적지 {box.destination}", this);
+                Destroy(box.gameObject);
             }
         }
+
+        //  3) 판을 원위치로 되돌린다 (나갈 때와 같은 속도)
+        while (Vector3.Distance(head.position, home) > 0.0005f)
+        {
+            yield return new WaitForFixedUpdate();
+            head.position = Vector3.MoveTowards(head.position, home, speed * Time.fixedDeltaTime);
+        }
+        head.position = home;
+        IsPushing = false;
     }
 
-    // 반대쪽 판을 원래 상태로 켠다. 상자가 그 판과 겹쳐 있으면 켜지 않는다.
-    /// [주의] 겹쳐서 못 켜면 꺼진 채 남고, 다음 동작이 끝날 때 다시 확인한다.
-    void RestoreSeparator()
+    // 판 앞면에서 상자 옆면까지 거리 m (미는 방향으로 잰다). 판이 이만큼 나가야 상자에 닿는다.
+    /// 판 앞면은 판 렌더러의 경계 상자(Bounds)로 잰다. 렌더러가 없으면 판 중심을 앞면으로 본다.
+    float ContactGap(BoxInfo box, Vector3 direction)
     {
-        if (!separatorSuppressed || oppositeSeparator == null) { return; }
-        if (separatorWasActive && parcel != null && separatorColliders != null)
-            foreach (var c in separatorColliders)
-                if (c != null && c.enabled && !c.isTrigger &&
-                    Physics.ComputePenetration(c, c.transform.position, c.transform.rotation, parcel, parcel.transform.position, parcel.transform.rotation, out _, out _)
-                ) { return; }
-        oppositeSeparator.SetActive(separatorWasActive); 
-        separatorSuppressed = false;
+        Transform head = Head;
+        float headFront = Vector3.Dot(head.position, direction);
+
+        Renderer headRenderer = head.GetComponentInChildren<Renderer>();
+        if (headRenderer != null)
+        {
+            Bounds bounds = headRenderer.bounds;
+            Vector3 reach = new Vector3(Mathf.Abs(direction.x), Mathf.Abs(direction.y), Mathf.Abs(direction.z));
+            headFront = Vector3.Dot(bounds.center, direction) + Vector3.Dot(bounds.extents, reach);
+        }
+
+        float boxBack = Vector3.Dot(ConveyorLine.PositionOf(box), direction) - ConveyorLine.HalfSize(box, direction);
+        return Mathf.Max(0f, boxBack - headFront);
     }
-    // 선택하면 확인 영역(하늘색)과 미는 방향 · 거리(노란 선)를 그린다.
+
+
+    //  ============================================================
+    //  테스트 (Play 중에만)
+    //  ============================================================
+    // [테스트] BoxPusher ⋮ 메뉴 → "테스트/판만 밀어 보기" (상자 없이 판이 나갔다 돌아오는지)
+    [ContextMenu("테스트/판만 밀어 보기")]
+    void TestStroke()
+    {
+        if (!Application.isPlaying || IsPushing) { return; }
+        StartCoroutine(PushRoutine(null));
+    }
+
+    // 테스트 패널 (showTestButtons가 켜져 있을 때만)
+    void OnGUI()
+    {
+        if (!showTestButtons) { return; }
+
+        GUILayout.BeginArea(new Rect(guiPosition.x, guiPosition.y, 240, 70), GUI.skin.box);
+        GUILayout.Label($"[푸셔 {target}] 밀어낸 수 {PushedCount} | {(IsPushing ? "동작 중" : "대기")}");
+        GUI.enabled = !IsPushing;
+        if (GUILayout.Button("판만 밀어 보기")) { TestStroke(); }
+        GUI.enabled = true;
+        GUILayout.EndArea();
+    }
+
+    // Scene 뷰에서 선택하면 분기 지점(주황 공)과 밀린 상자가 멈출 자리(노란 선 끝)를 그린다.
     void OnDrawGizmosSelected()
     {
-        Gizmos.color = Color.cyan;
-        if (mode == PusherMode.RejectToBin) { Gizmos.DrawWireCube(collectionCenter, collectionSize); }
-        else { Gizmos.DrawWireCube(receiverCenter, receiverSize); }
+        if (divertPoint == null) { return; }
 
-        Gizmos.color = Color.yellow; 
-        Gizmos.DrawLine(transform.position, transform.position + direction.normalized * maxTravel);
+        Vector3 end = divertPoint.position + PushDirection * pushDistance;
+        Gizmos.color = new Color(1f, 0.5f, 0f);
+        Gizmos.DrawSphere(divertPoint.position, 0.01f);
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawLine(divertPoint.position, end);
+        Gizmos.DrawWireSphere(end, 0.01f);
     }
 }

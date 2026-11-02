@@ -9,7 +9,7 @@ using UnityEngine;
 //      - 상자가 터미널 컨테이너나 NG 토트에 들어가면 Finish()로 최종 상태를 정하고 집계한다.
 //      - 이상 상황은 RaiseAlarm()로 알리고, 같은 경고가 연속되면 알람으로 멈춘다.
 //
-///// : TODO : 현재는 골격만 세워진 단계
+                    ///// : TODO : 현재는 골격만 세워진 단계
 //  [골격 단계] 설정 복사, 설비 상태, 운전 명령, 제어 방식, 알람, 집계까지 들어 있다.
 //             스테이션 동작과 다른 스크립트 연결은 그 스크립트를 만들 때 하나씩 채운다 ([다음 단계] 표시).
 //  
@@ -26,6 +26,8 @@ using UnityEngine;
 //      * 측정할 때 상자만 잠깐 카메라 레이어로 옮겨 찍는다. 뒤에 줄 선 상자 · 벨트 · 로봇은 찍히지 않는다 (설계서: 측면 카메라 위치를 씬 작업에서 정함).
 //      * 행동 선택(ChooseFace)은 위로 올릴 면을 돌려주고, Top이면 완료로 본다 (설계서: 완료 + 올릴 면 5개).
 //      * 카메라 5대가 없으면 운전을 시작하지 않는다 (Check). 운전 중에 없어지면 JudgeFail로 표시한다.
+//      * 교정 로봇(correction)이 비어 있으면 상자를 그 자리에서 바로 돌린다 (RotateInPlace, 로봇 없는 테스트 씬용).
+//      * 교정 로봇이 실패하면(LastSuccess false) 경고를 올리고 더 돌리지 않는다. CorrectionFail 표시는 CorrectionSequence.CorrectAt()이 한다.
 //  ============================================================
 public class CellController : MonoBehaviour
 {
@@ -57,9 +59,11 @@ public class CellController : MonoBehaviour
     [SerializeField] LabelPresenceDetector faceDetector;
     [SerializeField] LabelReader reader;
 
-                    ///// : TODO : 
+    [Tooltip("(선택) 교정 로봇암 (CorrectionSequence). 비우면 상자를 그 자리에서 바로 돌린다 (자리 표시)")]
+    [SerializeField] CorrectionSequence correction;
+
+                        ///// : TODO : 
     //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
-    //      correction (CorrectionSequence)          교정 로봇암 동작 (손가락 그리퍼, 물리 파지)
     //      loaders (LoadSequence[3])                터미널 끝 흡착 로봇 (Check()와 알람 정지용)
     //      correctionAgent (CorrectionAgent)        ML ① 교정 학습 정책
     //      reader (LabelReaderAgent)                ML ② 송장 판독 정책
@@ -80,7 +84,7 @@ public class CellController : MonoBehaviour
     public ControlMode Mode { get; private set; } = ControlMode.Basic;
     public ControlMode PendingMode { get; private set; } = ControlMode.Basic;
 
-                    ///// : TODO : 
+    ///// : TODO : 
     /// [CorrectionAgent 구현 후] 그 모델 칸을 확인하도록 바꾼다. 지금은 항상 false.
     /// CorrectionAgent에 학습된 모델(.onnx)이 연결되어 있는지.
     public bool HasPolicy => false;
@@ -96,7 +100,7 @@ public class CellController : MonoBehaviour
     public int[] TerminalCounts { get; private set; } = new int[3];
     public int[] ExceptionsByReason { get; private set; } = new int[System.Enum.GetValues(typeof(ExceptionReason)).Length];
 
-                    ///// : TODO : 
+                        ///// : TODO : 
     /// [ConveyorLine 구현 후] StationWaitSeconds(교정 스테이션 대기 시간)는 ConveyorLine 연결 후 추가한다.
     /// 시간당 판별량 = 최근 60초 처리 수 × 60, 예외율 (0 ~ 1)    (FR-10)
     public float ThroughputPerHour => finishTimes.Count * 60f;
@@ -138,7 +142,7 @@ public class CellController : MonoBehaviour
     void Update()
     {
         while (finishTimes.Count > 0 && Time.time - finishTimes.Peek() > 60f)
-            { finishTimes.Dequeue(); }
+        { finishTimes.Dequeue(); }
     }
 
 
@@ -201,7 +205,7 @@ public class CellController : MonoBehaviour
 
         Debug.LogWarning($"[Cell] 경고 | {type} | {boxId} ({consecutiveErrors}회 연속)", this);
         OnAlarm?.Invoke(type, boxId);
-                    ///// : TODO : 
+        ///// : TODO : 
         //  [다음 단계] log.Event(type, boxId);
 
         if (consecutiveErrors >= maxConsecutiveErrors && !alarmActive)
@@ -210,8 +214,11 @@ public class CellController : MonoBehaviour
             stopRequested = true;
             State = CellState.Stopped;
             if (feeder != null) { feeder.StopFeeding(); }       // 운전 전 테스트에서도 불릴 수 있어 빈 칸을 확인한다
+            if (correction != null) { correction.Stop(); }      // 교정 로봇은 그 자리에서 관절각을 유지한다 (손가락은 그대로)
+
                                 ///// : TODO : 
-            //  [다음 단계] 벨트 · 교정 로봇 · 끝 로봇 3대 정지
+            //  [다음 단계] 벨트 · 끝 로봇 3대 정지
+
             Debug.LogError($"[Cell] 알람 정지 | {type} {consecutiveErrors}회 연속", this);
         }
     }
@@ -274,7 +281,7 @@ public class CellController : MonoBehaviour
         }
 
         Debug.Log($"[Cell] {box.boxId} {result} | 목적지 {box.destination} | 회전 {box.rotationCount}회", this);
-                    ///// : TODO : 
+                            ///// : TODO : 
         //  [다음 단계] log.Write(box);
     }
 
@@ -310,7 +317,7 @@ public class CellController : MonoBehaviour
 
         //  투입을 먼저 시작한다. Feeder의 칸이 비어 시작하지 못하면 운전도 멈춘다
         feeder.StartFeeding(count);
-        if(!feeder.IsFeeding)
+        if (!feeder.IsFeeding)
         {
             State = CellState.Stopped;
             IsRunning = false;
@@ -351,11 +358,11 @@ public class CellController : MonoBehaviour
     /// 운전이 끝날 때까지 상자를 하나씩 처리한다. 판독 구간 입구가 비어야 보낸다. (FR-16)
     IEnumerator CorrectStationLoop()
     {
-        while(IsRunning)
+        while (IsRunning)
         {
             //  1) 정지 위치에 상자가 올 때까지 기다린다
-            if(!correctLine.HasBoxAtStop)
-                { yield return null; continue; }
+            if (!correctLine.HasBoxAtStop)
+            { yield return null; continue; }
 
             BoxInfo box = correctLine.CurrentBox;
             box.correctArriveTime = Time.time;
@@ -379,18 +386,18 @@ public class CellController : MonoBehaviour
     // 측정 → 행동 선택(완료 또는 회전) → 회전 뒤 다시 측정. 완료 · 회전 한도 · 제한 시간 중 하나가 될 때까지 반복.
     /// [종료] 회전이 maxRotations에 닿거나 correctTimeLimit이 지나면 더 돌리지 않고 끝낸다 (예외 표시는 하지 않는다).
     ///        송장이 끝내 위로 오지 않은 상자는 판독 스테이션에서 NoLabel이 된다.
-    /// [!] 카메라가 없어 측정하지 못하면 JudgeFail로 표시하고 바로 끝낸다.
-    /// [Correction ML 준비 완료 후] CorrectionSequence, CorrectionAgent 연결 후 채운다.
+    /// [!] 카메라가 없어 측정하지 못하면 JudgeFail로 표시하고 바로 끝낸다. 교정 로봇이 실패해도 바로 끝낸다 (CorrectionFail 표시는 CorrectAt()이 한다).
+    /// [CorrectionAgent 구현 후] 행동 선택(ChooseFace)에 학습 정책을 연결한다.
     IEnumerator JudgeAndCorrect(BoxInfo box)
     {
-        while(true)
+        while (true)
         {
             //  1) 측정
             if (!Measure(box)) { yield break; }
 
             //  2) 행동 선택. Top이면 완료
             BoxFace face = ChooseFace(box);
-            if(face == BoxFace.Top)
+            if (face == BoxFace.Top)
             {
                 string result = box.judgedFace == BoxFace.Top ? "송장 위" : "뒤집은 뒤에도 송장이 안 보임";
                 Debug.Log($"[Cell] 교정 끝 | {box.boxId} | {result} | 회전 {box.rotationCount}회", this);
@@ -399,37 +406,48 @@ public class CellController : MonoBehaviour
 
             //  3) 회전 한도 · 제한 시간. 넘으면 지금 자세 그대로 보낸다
             bool limit = box.rotationCount >= Settings.maxRotations;
-            if(limit || Time.time - box.correctArriveTime >= correctTimeLimit)
+            if (limit || Time.time - box.correctArriveTime >= correctTimeLimit)
             {
                 string why = limit ? $"회전 한도 {Settings.maxRotations}회" : $"제한 시간 {correctTimeLimit:0}초";
                 Debug.LogWarning($"[Cell] 교정 중단 ({why}) | {box.boxId} | 판정 {box.judgedFace} 그대로 보냄", this);
                 yield break;
             }
 
-            //  4) 올릴 면을 위로 돌린다. 끝나면 1)로 돌아가 다시 측정
+            //  4) 올릴 면을 위로 돌린다. 교정 로봇이 없으면 그 자리에서 바로 돌린다 (자리 표시)
+            /// 상자 물리를 켜기는 CorrectAt(), 끄기는 ConveyorLine.Release()가 한다 (벨트 위 상자는 kinematic).
             box.state = BoxState.Correcting;
             box.chosenRotation = Quaternion.FromToRotation(BoxInfo.FaceDirection(face), Vector3.up).eulerAngles;
-
-                                ///// : TODO :
-            //  [CorrectionSequence 연결 후] RotateinPlace() 대신 correction.CorrectAt(box,face). LastSuccess가 false면 box.Mark(CorrectionFail) 후 끝냄
-            /// 상자 물리를 켜기는 CorrectAt(), 끄기는 ConveyorLine.Release()가 한다 (벨트 위 상자는 kinematic).
-            yield return RotateInPlace(box, face);
+            if (correction != null)
+            { yield return correction.CorrectAt(box, face); }
+            else
+            { yield return RotateInPlace(box, face); }
 
             box.rotationCount++;
             if (face == BoxFace.Bottom) { box.flipped = true; }
+
+            //  5) 로봇 교정이 실패하면 경고를 올리고 끝낸다. 상자는 CorrectAt()이 CorrectionFail로 표시했고, 판독 구간을 거쳐 NG로 간다
+            if (correction != null && !correction.LastSuccess)
+            {
+                Debug.LogWarning($"[Cell] 교정 실패 | {box.boxId} | {correction.FailReason}", this);
+                RaiseAlarm("교정 실패", box.boxId);
+                yield break;
+            }
+
+            //  끝나면 1)로 돌아가 다시 측정
             box.state = BoxState.Judging;
         }
     }
+
+    // (지훈님) 바깥에서 송장 면 판정만 할 때 부른다 (FaceJudgeAgent, InferenceIntegrationCheck). Measure()와 같다.
+    public bool TryJudgeFace(BoxInfo box) => box != null && Measure(box);
 
     //  카메라 5대로 송장 색 비율을 재 box.faceRatios에, 규칙 판정(비율이 가장 큰 면, 모두 기준 미만이면 Bottom)을 box.judgedFace에 기록한다.
     /// 상자만 잠깐 카메라 레이어로 옮겨 찍고 되돌린다 (한 프레임 안에 끝남).
     /// [!] FaceCameraRig.Measure()의 순서(위·오른쪽·뒤·왼쪽·앞)를 faceRatios 순서(0:위, 1:앞, 2:뒤, 3:왼쪽, 4:오른쪽)로 바꿔 넣는다.
     /// [주의] 카메라가 없으면 JudgeFail로 표시하고 false.
-    public bool TryJudgeFace(BoxInfo box) => box != null && Measure(box);
-
     bool Measure(BoxInfo box)
     {
-        if(faceRig == null || !faceRig.IsBuilt)
+        if (faceRig == null || !faceRig.IsBuilt)
         {
             box.Mark(ExceptionReason.JudgeFail);
             RaiseAlarm("측정 실패", box.boxId);
@@ -457,7 +475,7 @@ public class CellController : MonoBehaviour
 
         //  2) 카메라 순서 --> faceRatios 순서
         for (int i = 0; i < FaceCameraRig.FaceCount; i++)
-            { box.faceRatios[(int)FaceCameraRig.CapturedFaces[i]] = ratios[i]; }
+        { box.faceRatios[(int)FaceCameraRig.CapturedFaces[i]] = ratios[i]; }
         box.judgedFace = faceRig.JudgeFace(ratios);
 
         //  3) 로그. 송장이 있는 상자는 실제 송장 방향(LabelFaceNow)과 비교해, 판정이 다르면 경고한다 (테스트 확인용)
@@ -475,16 +493,15 @@ public class CellController : MonoBehaviour
     /// 기본 제어: 카메라 판정(judgedFace)을 그대로 쓴다. 이미 뒤집었는데 또 Bottom이면 송장이 없는 상자로 보고 완료로 둔다.
     BoxFace ChooseFace(BoxInfo box)
     {
-                        /////   : TODO :
+        /////   : TODO :
         //  [CorrectionAgent 구현 후] Mode == ControlMode.Policy면 correctionAgent.Decide(box)로 고른 면을 쓴다.
         if (box.judgedFace == BoxFace.Bottom && box.flipped) { return BoxFace.Top; }
         return box.judgedFace;
     }
 
-                        /////   : TODO :
     //  [자리 표시] 올릴 면이 위로 오게 상자를 그 자리에서 바로 돌리고, 로봇 동작 시간만큼 기다린다.
     /// 바닥 높이는 그대로 두고 중심 높이만 다시 맞춘다 (5*6*7cm 상자는 눕히면 높이가 바뀐다).
-    /// [CorrectionSequence 연결 후] 이 함수를 지운다.
+    /// correction 칸이 비었을 때만 쓴다 (로봇 없는 테스트 씬).
     IEnumerator RotateInPlace(BoxInfo box, BoxFace face)
     {
         Transform boxTransform = box.transform;
@@ -497,7 +514,7 @@ public class CellController : MonoBehaviour
 
         //  kinematic 상자는 물리 엔진 쪽 위치 · 회전도 같이 맞춘다 (ConveyorLine은 Rigidbody 위치로 잰다)
         Rigidbody body = box.GetComponent<Rigidbody>();
-        if(body != null)
+        if (body != null)
         {
             body.position = position;
             body.rotation = boxTransform.rotation;
@@ -523,7 +540,7 @@ public class CellController : MonoBehaviour
     static void SetLayer(GameObject root, int layer)
     {
         foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-            { child.gameObject.layer = layer; }
+        { child.gameObject.layer = layer; }
     }
 
     // 판독 스테이션: 도착 대기 → 판독 → 검증 → box.destination 기록 → 분류 구간으로 이송    (FR-04, FR-07)
@@ -531,21 +548,24 @@ public class CellController : MonoBehaviour
     /// [Label ML 준비 완료 후] LabelReaderAgent, LabelValidator 연결 후 채운다.
     IEnumerator ReadStationLoop()
     {
-        while(IsRunning)
+        while (IsRunning)
         {
             //  1) 정지 위치에 상자가 올 때까지 기다린다
-            if(!readLine.HasBoxAtStop)
-                { yield return null; continue; }
+            if (!readLine.HasBoxAtStop)
+            { yield return null; continue; }
 
             BoxInfo box = readLine.CurrentBox;
             box.readArriveTime = Time.time;
             box.state = BoxState.Reading;
             Debug.Log($"[Cell] 판독 스테이션 도착 | {box.boxId} | 교정 -> 판독 {box.readArriveTime - box.correctArriveTime:F1}초", this);
 
-            //  2) 실제 OCR · 규칙 검증. 미연결은 성공으로 처리하지 않는다.
-            if (reader != null) yield return reader.Read(box);
-            else { box.Mark(ExceptionReason.ReadFail); Debug.LogError("[Cell] LabelReader가 연결되지 않았습니다.", this); }
+            //  2) 판독 · 검증. LabelReader가 연결되어 있으면 OCR · 규칙 검증을 한다 (reader.Read()가 목적지 또는 예외를 기록).
+            //     연결이 없으면 (테스트 씬) 자리 표시: 1초 기다린 뒤 송장 정답으로 목적지를 정한다 (PlaceholderRead()).
+            bool placeholder = reader == null;
+            if (!placeholder) { yield return reader.Read(box); }
+            else { yield return new WaitForSeconds(1f); }
             if (!IsRunning) { yield break; }
+            if (placeholder) { PlaceholderRead(box); }
 
             //  3) 분류 구간으로 보낸다
             box.state = BoxState.Sorting;
@@ -553,11 +573,27 @@ public class CellController : MonoBehaviour
         }
     }
 
+    //  [자리 표시] 판독 결과 대신 송장 정답으로 목적지를 정한다. 분류 구간(푸셔)을 시험하기 위한 것.
+    /// 이미 예외가 표시된 상자는 그대로 둔다. 송장이 윗면에 없으면 NoLabel, 자리수 오류는 ReadFail, 그 밖의 규칙 위반은 RuleViolation.
+    /// [Label ML 준비 완료 후] 이 함수를 지운다.
+    void PlaceholderRead(BoxInfo box)
+    {
+        if (!box.IsMarked)
+        {
+            Destination answer = ExpectedDestination(box);
+            if (box.LabelFaceNow != BoxFace.Top) { box.Mark(ExceptionReason.NoLabel); }         //  송장 없는 상자도 여기(LabelFaceNow = None)
+            else if (answer != Destination.NG) { box.destination = answer; }
+            else if ((box.labelNumber ?? "").Length != 5) { box.Mark(ExceptionReason.ReadFail); }
+            else { box.Mark(ExceptionReason.RuleViolation); }
+        }
+        Debug.Log($"[Cell] 판독 (자리 표시) | {box.boxId} | 목적지 {box.destination}{(box.IsMarked ? $" ({box.reason})" : "")}", this);
+    }
+
 
     //  ============================================================
     //  점검 · 요약
     //  ============================================================
-                    ///// : TODO : 
+                        ///// : TODO : 
     /// [다음 단계] 연결 칸을 열 때마다 여기에 추가한다.
     // 필수 칸 확인. 빠진 칸이 있으면 이름을 알려 주고 false.
     bool Check()
@@ -568,25 +604,35 @@ public class CellController : MonoBehaviour
                        : feeder == null ? "Feeder"
                        : faceRig == null ? "Face Rig"
                        : null;
-        if (missing != null) 
-        { 
+        if (missing != null)
+        {
             Debug.LogWarning($"[Cell] {missing} 칸이 비어 있어 운전을 시작하지 않습니다.", this);
             return false;
         }
 
         //  카메라 리그: 카메라 5대가 없으면 시작하지 않는다. 모든 레이어를 보면 경고만 한다
-        if(!faceRig.IsBuilt)
+        if (!faceRig.IsBuilt)
         {
             Debug.LogWarning("[Cell] Face Rig에 카메라가 없습니다. FaceCameraRig의 '카메라 5대 배치 / 갱신' 버튼을 누르세요.", faceRig);
             return false;
         }
         if (faceDetector != null && !faceDetector.ValidateConfiguration(out string modelError))
         { Debug.LogWarning("[Cell] ONNX 준비 실패: " + modelError, this); return false; }
-        if(faceRig.SeesEverything)
+        if (faceRig.SeesEverything)
         {
             Debug.LogWarning(
-                "[Cell] Face Rig가 모든 레이어를 봅니다. 벨트 · 로봇까지 찍혀 판정이 틀립니다. '상자 레이어(ScanTarget)만 보기' 버튼을 누르세요.", 
+                "[Cell] Face Rig가 모든 레이어를 봅니다. 벨트 · 로봇까지 찍혀 판정이 틀립니다. '상자 레이어(ScanTarget)만 보기' 버튼을 누르세요.",
                 faceRig);
+        }
+
+        //  교정 로봇: 비어 있으면 자리 표시로 돌린다. 있으면 제한 시간이 로봇 동작보다 짧은지 본다
+        if (correction == null)
+        { Debug.Log("[Cell] Correction 칸이 비어 있어 상자를 그 자리에서 돌립니다 (자리 표시).", this); }
+        else if (correctTimeLimit < 60f)
+        {
+            Debug.LogWarning(
+                $"[Cell] Correct Time Limit {correctTimeLimit:0}초는 교정 로봇 1회보다 짧을 수 있습니다. 첫 회전 뒤 시간이 지나 있으면 두 번째 회전 없이 보냅니다.",
+                this);
         }
         return true;
     }
@@ -596,15 +642,13 @@ public class CellController : MonoBehaviour
     {
         string reasons = "";
         for (int i = 1; i < ExceptionsByReason.Length; i++)
-            if (ExceptionsByReason[i] > 0) 
-                { reasons += $" {(ExceptionReason)i} {ExceptionsByReason[i]}"; }
-        
+            if (ExceptionsByReason[i] > 0)
+            { reasons += $" {(ExceptionReason)i} {ExceptionsByReason[i]}"; }
+
         return $"처리 {Processed} | 성공 {Success} · 실패 {Fail} · 예외 {Exceptions}{(reasons == "" ? "" : $" ({reasons.Trim()})")} | " +
                $"A {TerminalCounts[0]} · B {TerminalCounts[1]} · C {TerminalCounts[2]} | 회전 합 {Corrections} | " +
                $"예외율 {ExceptionRate * 100f:0.#}% | 시간당 {ThroughputPerHour:0}개";
     }
-
-
 
 
     //  ============================================================
@@ -693,4 +737,4 @@ public class CellController : MonoBehaviour
     {
         if (Playing()) { SetMode(ControlMode.Policy); }
     }
-}
+}
