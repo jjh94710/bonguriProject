@@ -1562,7 +1562,7 @@ MonoBehaviour:
   toLine: {fileID: 1578731027}
   pushDistance: 0.25
   pushDuration: 0.6
-  waitLimit: 3
+  waitLimit: 10
   showTestButtons: 1
   guiPosition: {x: 510, y: 80}
 --- !u!4 &1261761848
@@ -2197,7 +2197,7 @@ MonoBehaviour:
   lineName: "\uD130\uBBF8\uB110 A"
   entry: {fileID: 1125600174}
   exit: {fileID: 686982635}
-  speed: 0
+  speed: 0.3
   gap: 0.03
   beltWidth: 0.2
   nextLine: {fileID: 0}
