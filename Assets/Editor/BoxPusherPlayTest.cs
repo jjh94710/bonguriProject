@@ -9,6 +9,7 @@ public static class BoxPusherPlayTest
     static BoxPusher p; static int stage; static float started; static Vector3 home, delivered; static double wall;
     static BoxPusherPlayTest()
     {
+        if (!EditorApplication.isPlayingOrWillChangePlaymode) SessionState.SetBool(Key, false);
 
         EditorApplication.update += () => {
             if (!EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isCompiling && !EditorApplication.isUpdating && File.Exists("Temp/RunRestoredPusher.request")) {
