@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// FR-03 ① 판정 카메라 리그.
@@ -16,7 +16,7 @@ public class FaceCameraRig : MonoBehaviour
     /// <summary>카메라 배열과 같은 순서. Bottom 은 카메라가 없다.</summary>
     public static readonly BoxFace[] CapturedFaces =
     {
-        BoxFace.Top, BoxFace.Right, BoxFace.Back, BoxFace.Left, BoxFace.Front,
+        BoxFace.Top, BoxFace.Front, BoxFace.Back, BoxFace.Left, BoxFace.Right,
     };
 
     [Header("배치 기준")]
@@ -42,6 +42,13 @@ public class FaceCameraRig : MonoBehaviour
     [SerializeField] LayerMask cullingMask = ~0;
     [SerializeField] Color background = Color.black;
 
+    [Header("측면 보조 조명")]
+    [SerializeField] bool useSideFillLights = true;
+    [Tooltip("카메라 옆에서 상자 중심을 비추는 보조 조명의 밝기.")]
+    [SerializeField, Range(0f, 2f)] float sideFillIntensity = 0.2f;
+    [SerializeField, Min(0.1f)] float sideFillDistance = 0.35f;
+    [SerializeField] Color sideFillColor = Color.white;
+
     [Header("송장 색 비율 (기본 제어 판정)")]
     // 송장 바탕색을 절대 RGB 로 맞춰보던 때는 빛을 덜 받는 앞면·왼쪽면 송장을 놓쳤다.
     // 평가셋 100 상자 중 91 개만 맞아 FR-03 인수 기준(95 개)에 못 미쳤다.
@@ -56,6 +63,30 @@ public class FaceCameraRig : MonoBehaviour
     [SerializeField, Range(0f, 1f)] float labelPixelRatio = 0.05f;
 
     [SerializeField, HideInInspector] Camera[] faceCameras = new Camera[FaceCount];
+
+    // 기존 씬의 Right/Front 참조를 한 번만 교환한다. 카메라 위치는 유지된다.
+    [SerializeField, HideInInspector] int cameraOrderVersion;
+
+    void Awake()
+    {
+        EnsureCameraOrder();
+        BuildFillLights();
+    }
+    void OnValidate() => EnsureCameraOrder();
+
+    public void EnsureCameraOrder()
+    {
+        if (cameraOrderVersion >= 1) return;
+        if (faceCameras != null && faceCameras.Length == FaceCount)
+        {
+            var oldRight = faceCameras[1];
+            faceCameras[1] = faceCameras[4];
+            faceCameras[4] = oldRight;
+            for (int i = 0; i < FaceCount; i++)
+                if (faceCameras[i] != null) faceCameras[i].name = $"FaceCam_{CapturedFaces[i]}";
+        }
+        cameraOrderVersion = 1;
+    }
 
     // 게임 화면 미리보기용 상시 출력. 도메인 리로드 때 날아가면 다시 만든다.
     [System.NonSerialized] RenderTexture[] liveTextures;
@@ -94,6 +125,8 @@ public class FaceCameraRig : MonoBehaviour
     /// <summary>카메라 5 대를 만들거나 현재 설정에 맞춰 다시 배치한다.</summary>
     public void BuildRig()
     {
+        EnsureCameraOrder();
+        BuildFillLights();
         if (faceCameras == null || faceCameras.Length != FaceCount)
             faceCameras = new Camera[FaceCount];
 
@@ -130,6 +163,53 @@ public class FaceCameraRig : MonoBehaviour
 
             // 매 프레임 그리지 않고 Capture() 에서 직접 Render() 한다.
             cam.enabled = false;
+        }
+    }
+
+    /// <summary>앞/뒤/좌/우에 상자 전용 스폿 조명을 추가하거나 갱신한다.</summary>
+    [ContextMenu("측면 보조 조명 추가 / 갱신")]
+    public void BuildFillLights()
+    {
+        const string groupName = "FaceFillLights";
+        var group = transform.Find(groupName);
+        if (group == null)
+        {
+            if (!useSideFillLights) return;
+            var go = new GameObject(groupName);
+            go.transform.SetParent(transform, false);
+            group = go.transform;
+        }
+        group.gameObject.SetActive(useSideFillLights);
+        if (!useSideFillLights) return;
+        float maxDim = Mathf.Max(boxSize.x, Mathf.Max(boxSize.y, boxSize.z));
+        float distance = Mathf.Max(sideFillDistance, maxDim * 1.5f);
+        for (int i = 1; i < FaceCount; i++)
+        {
+            var face = CapturedFaces[i];
+            string lightName = "FillLight_" + face;
+            var child = group.Find(lightName);
+            if (child == null)
+            {
+                var go = new GameObject(lightName);
+                go.transform.SetParent(group, false);
+                child = go.transform;
+            }
+            var fill = child.GetComponent<Light>();
+            if (fill == null) fill = child.gameObject.AddComponent<Light>();
+            Vector3 outward = OutwardOf(face);
+            child.position = BoxCenter + outward * distance;
+            child.rotation = Quaternion.LookRotation(-outward, Vector3.up);
+            fill.type = LightType.Spot;
+            fill.spotAngle = 80f;
+            fill.innerSpotAngle = 60f;
+            fill.range = distance * 2f + maxDim;
+            fill.intensity = sideFillIntensity;
+            fill.color = sideFillColor;
+            fill.shadows = LightShadows.None;
+            fill.cullingMask = cullingMask.value;
+            fill.renderMode = LightRenderMode.ForcePixel;
+            fill.bounceIntensity = 0f;
+            fill.enabled = true;
         }
     }
 
