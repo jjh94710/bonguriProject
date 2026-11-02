@@ -26,6 +26,8 @@ using UnityEngine;
 //      * 측정할 때 상자만 잠깐 카메라 레이어로 옮겨 찍는다. 뒤에 줄 선 상자 · 벨트 · 로봇은 찍히지 않는다 (설계서: 측면 카메라 위치를 씬 작업에서 정함).
 //      * 행동 선택(ChooseFace)은 위로 올릴 면을 돌려주고, Top이면 완료로 본다 (설계서: 완료 + 올릴 면 5개).
 //      * 카메라 5대가 없으면 운전을 시작하지 않는다 (Check). 운전 중에 없어지면 JudgeFail로 표시한다.
+//      * 교정 로봇(correction)이 비어 있으면 상자를 그 자리에서 바로 돌린다 (RotateInPlace, 로봇 없는 테스트 씬용).
+//      * 교정 로봇이 실패하면(LastSuccess false) 경고를 올리고 더 돌리지 않는다. CorrectionFail 표시는 CorrectionSequence.CorrectAt()이 한다.
 //  ============================================================
 public class CellController : MonoBehaviour
 {
