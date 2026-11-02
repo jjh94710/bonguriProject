@@ -12,7 +12,7 @@ using UnityEngine;
 //  [공정 단계]
 //  투입(CorrectLine entry) --> 교정 스테이션(stopPoint) --> CorrectLine exit = ReadLine entry
 //  --> 판독 스테이션(stopPoint) --> ReadLine exit = 분류 구간 entry
-//  --> 분류 구간(푸셔 NG · A · B · C) --> 터미널 A · B · C 끝(stopPoint) --> 끝 로봇이 컨테이너로
+//  --> 분류 구간(푸셔 NG · A · C, B는 직진) --> 터미널 A · B · C 끝(stopPoint) --> 끝 로봇이 컨테이너로
 //
 //  [이송 방식] 가이드처럼 물리를 끈(kinematic) 상자를 스크립트가 물리 스텝마다 옮긴다.
 //             흐름 방향은 입구 → 출구로 계산하므로 벨트가 어느 축을 향해도 된다.
@@ -57,7 +57,7 @@ public class ConveyorLine : MonoBehaviour
     [Tooltip("(선택) 이송 실패를 알릴 CellController. 비우면 Console 경고만 남긴다")]
     [SerializeField] CellController cell;
 
-    [Tooltip("(선택) 이 구간의 푸셔. 상자가 지나가는 순서대로 넣는다 (분류 구간: NG → A → C")]
+    [Tooltip("(선택) 이 구간의 푸셔. 상자가 지나가는 순서대로 넣는다 (분류 구간: NG → A → C)")]
     [SerializeField] BoxPusher[] pushers;
 
     //  ---------------- 정지 위치 ----------------    (FR-02, FR-16)
@@ -294,7 +294,7 @@ public class ConveyorLine : MonoBehaviour
     //  이송
     //  ============================================================
     // 상자 1개를 출구까지 옮긴다 (상자마다 하나씩 돈다).
-    /// 출구 · 정지 위치 · 앞 상자 뒤 중 가장 가까운 곳까지 일정한 속도로 가고, 막히면 그 자리에서 기다린다.
+    /// 출구 · 정지 위치 · 분기 지점 · 앞 상자 뒤 중 가장 가까운 곳까지 일정한 속도로 가고, 막히면 그 자리에서 기다린다.
     /// distance = 입구에서 흐름 방향으로 온 거리 m
     IEnumerator CarryRoutine(BoxInfo box)
     {
@@ -307,7 +307,7 @@ public class ConveyorLine : MonoBehaviour
         {
             yield return new WaitForFixedUpdate();      //  물리 스텝마다 한 칸씩
 
-            //  1) 지워졌거나 Take()로 빠졌으면 끝낸다
+            //  1) 지워졌거나 TakeAway()로 빠졌으면 끝낸다
             if (box == null)
             {
                 boxes.RemoveAll(item => item == null);
@@ -322,7 +322,7 @@ public class ConveyorLine : MonoBehaviour
             //  3) 벨트 밖으로 벗어났으면 이송 실패
             if (CheckOffBelt(box)) { yield break; }
 
-            //  4) 이번 스텝에 갈 수 있는 곳 = 출구, 정지 위치, 앞 상자 뒤 중 가장 가까운 곳
+            //  4) 이번 스텝에 갈 수 있는 곳 = 출구, 정지 위치, 다음 분기 지점, 앞 상자 뒤 중 가장 가까운 곳
             float distance = AlongBelt(PositionOf(box));
             float limit = BeltLength;
             if (!passedStop) { limit = Mathf.Min(limit, stopAt); }

@@ -539,7 +539,7 @@ public class CellController : MonoBehaviour
         }
     }
 
-    //  [자리 표시] 판독 결과 대신 송장 정답으로 목적지를 정한다. 분류 구간(푸슈)을 시험하기 위한 것.
+    //  [자리 표시] 판독 결과 대신 송장 정답으로 목적지를 정한다. 분류 구간(푸셔)을 시험하기 위한 것.
     /// 이미 예외가 표시된 상자는 그대로 둔다. 송장이 윗면에 없으면 NoLabel, 자리수 오류는 ReadFail, 그 밖의 규칙 위반은 RuleViolation.
     /// [Label ML 준비 완료 후] 이 함수를 지운다.
     void PlaceholderRead(BoxInfo box)
