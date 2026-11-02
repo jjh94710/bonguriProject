@@ -57,7 +57,7 @@ public enum ExceptionReason
 public enum LabelCheck
 {
     OK,              //  통과: 숫자 5자리 + 유효 지역 코드 + 주소 지역 일치
-    DigitError,      //  숫자 5자리가 아님 (예: 2213). 예외 사유는 ReadFail로 기록
+    DigitError,      //  검증 입력이 숫자 5자리가 아님. OCR의 빈 칸/모름은 검증 전에 ReadFail로 처리
     RegionError,     //  앞 2자리가 유효 지역 코드가 아님 (예: 23137)
     AddressMismatch  //  지역 코드와 주소 지역이 다름 (예: 11137인데 주소가 부산)
 }

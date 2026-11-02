@@ -60,13 +60,25 @@ public static class LabelTextOcclusionCheck
             text.text = "88";
             text.font.RequestCharactersInTexture(text.text, text.fontSize, text.fontStyle);
             LabelTextOcclusion.Prepare(textObject);
+            var renderer = textObject.GetComponent<MeshRenderer>();
+            var material = renderer.sharedMaterial;
+            for (int i = 0; i < 100; i++) LabelTextOcclusion.Prepare(textObject);
+            bool reused = renderer.sharedMaterial == material && textObject.GetComponents<LabelTextOcclusion>().Length == 1;
+            if (!reused) throw new InvalidOperationException("Prepare 반복 호출 시 재질/컴포넌트가 중복 생성됩니다.");
             textObject.transform.localPosition = new Vector3(0, 0, 0.11f);
             int behind = Difference(baseline, capture());
             textObject.transform.localPosition = new Vector3(0, 0, -0.11f);
             int front = Difference(baseline, capture());
             if (behind > 4 || front < 20)
                 throw new InvalidOperationException($"가림 검증 실패: 뒤쪽 변화 {behind}px, 앞쪽 변화 {front}px");
-            Debug.Log($"[LabelTextOcclusionCheck] PASS: 뒤쪽 글자 {behind}px (가려짐), 앞쪽 글자 {front}px (표시됨)");
+            UnityEngine.Object.DestroyImmediate(textObject.GetComponent<LabelTextOcclusion>());
+            bool disposed = material == null;
+            if (!disposed) throw new InvalidOperationException("글자 가림 컴포넌트 제거 후 임시 재질이 남았습니다.");
+            string directory = System.IO.Path.Combine(Application.dataPath, "..", "results", "text_occlusion");
+            System.IO.Directory.CreateDirectory(directory);
+            System.IO.File.WriteAllText(System.IO.Path.Combine(directory, "latest.json"),
+                $"{{\"behindChangedPixels\":{behind},\"frontChangedPixels\":{front},\"prepareCalls\":100,\"materialReused\":true,\"materialDisposed\":true,\"passed\":true}}");
+            Debug.Log($"[LabelTextOcclusionCheck] PASS: 뒤쪽 글자 {behind}px (가려짐), 앞쪽 글자 {front}px (표시됨), Prepare 100회 재사용, 임시 재질 해제 통과");
         }
         finally
         {

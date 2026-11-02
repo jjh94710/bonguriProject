@@ -2,6 +2,7 @@
 
 /// <summary>TextMesh 글자에 깊이 검사를 적용해 반대쪽 송장이 상자를 뚫고 보이지 않게 한다.</summary>
 [DisallowMultipleComponent]
+[ExecuteAlways]
 [RequireComponent(typeof(TextMesh), typeof(MeshRenderer))]
 public class LabelTextOcclusion : MonoBehaviour
 {

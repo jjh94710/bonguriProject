@@ -89,9 +89,9 @@ public class LabelLayout : ScriptableObject
     /// <summary>
     /// 글꼴 지표로 푼 크기에 곱하는 값. TMP 가 실제로 그리는 높이는 글꼴 지표만으로는
     /// 정확히 안 나와서(패딩 · 내부 배율), 찍는 쪽이 한 장 찍어 재고 여기에 넣는다.
-    /// 에셋에 저장하지 않는다. 글꼴이 바뀌어도 다음 생성 때 다시 맞춘다.
+    /// 학습과 운전에서 같은 크기를 쓰도록 보정값을 에셋에 저장한다.
     /// </summary>
-    [System.NonSerialized] public float sizeTweak = 1f;
+    [Min(.0001f)] public float sizeTweak = 1f;
 
     // Print 가 글자를 놓을 때 쓴 송장 평면의 가로 · 세로 축 (송장 로컬).
     // Aim 이 같은 축을 써야 카메라가 글자 위에 선다. 두 곳이 어긋나면 카메라가

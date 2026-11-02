@@ -206,7 +206,7 @@ public class LabelReaderDataset : MonoBehaviour
     /// 숫자가 칸 높이의 fillRatio 만큼 차지하도록 LabelLayout.sizeTweak 을 맞춘다.
     /// 잉크 높이는 글자 크기에 비례하므로 두세 번이면 수렴한다.
     /// </summary>
-    static void Calibrate(LabelLayout layout, BoxInfo info, Camera cam, int px, string probeRegion)
+    public static void Calibrate(LabelLayout layout, BoxInfo info, Camera cam, int px, string probeRegion)
     {
         float want = px * layout.fillRatio / (1f + layout.camMargin);
         layout.sizeTweak = 1f;                       // 지난 번 값이 남아 꼬이지 않게 한다
@@ -275,7 +275,7 @@ public class LabelReaderDataset : MonoBehaviour
     }
 
     /// <summary>카메라가 보는 그림을 회색조로 떠 온다.</summary>
-    static Texture2D Shoot(Camera cam, int width, int height)
+    public static Texture2D Shoot(Camera cam, int width, int height)
     {
         var rt = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
         RenderTexture prevActive = RenderTexture.active;

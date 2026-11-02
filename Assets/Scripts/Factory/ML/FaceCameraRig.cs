@@ -122,6 +122,19 @@ public class FaceCameraRig : MonoBehaviour
 
     // ── 리그 만들기 ──────────────────────────────────────────────
 
+    /// <summary>별도 판독 리그를 현재 정지 상자의 바운드에 맞춘다. 교정 리그와 공유하지 않는다.</summary>
+    public void FrameBox(BoxInfo box)
+    {
+        if (box == null) throw new System.ArgumentNullException(nameof(box));
+        var collider = box.GetComponent<BoxCollider>();
+        if (collider == null) throw new System.InvalidOperationException("상자 루트의 BoxCollider가 필요합니다.");
+        stopPoint = null;
+        stopPointIsBoxCenter = true;
+        transform.position = collider.bounds.center;
+        boxSize = collider.bounds.size;
+        BuildRig();
+    }
+
     /// <summary>카메라 5 대를 만들거나 현재 설정에 맞춰 다시 배치한다.</summary>
     public void BuildRig()
     {
