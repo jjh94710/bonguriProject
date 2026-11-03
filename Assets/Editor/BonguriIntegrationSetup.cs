@@ -35,6 +35,8 @@ public static class BonguriIntegrationSetup
             if (command == "repair-b-entry") BonguriConveyorSurfaceSetup.RepairBEntry();
             if (command == "audit-loading-layout") MatchTerminalLayout(false);
             if (command == "match-loading-layout") MatchTerminalLayout(true);
+            if (command == "add-tote-pedestals") AddTotePedestals();
+            if (command == "run-eight-box-check") BonguriEightBoxCheck.Run();
             if (command == "run-top" || command == "run-side" || command == "run-random")
             {
                 SessionState.SetString("BonguriIntegration.Run", command);
@@ -56,6 +58,61 @@ public static class BonguriIntegrationSetup
             else panel.RunSmoke(command == "run-side");
         }
         SessionState.EraseString("BonguriIntegration.Run");
+    }
+    [MenuItem("Tools/Bonguri/Integration/Add Tote Pedestals A B C")]
+    public static void AddTotePedestals()
+    {
+        if(EditorApplication.isPlayingOrWillChangePlaymode)throw new InvalidOperationException("Stop Play first.");
+        var scene=SceneManager.GetActiveScene();
+        if(scene.path!="Assets/Scenes/bongyuri.unity")throw new InvalidOperationException("Open bongyuri first.");
+        Physics.SyncTransforms();
+        var all=scene.GetRootGameObjects().SelectMany(r=>r.GetComponentsInChildren<Transform>(true)).ToArray();
+        var plans=new[]{"A","B","C"}.Select(id=>{
+            var group=all.Single(t=>t.name==id+"PartRobot");
+            var tote=group.GetComponentsInChildren<ToteBase>(true).Single();
+            var shapes=tote.GetComponentsInChildren<Collider>().Where(c=>c.enabled&&!c.isTrigger).ToArray();
+            if(shapes.Length==0)throw new InvalidOperationException(id+" tote has no solid colliders.");
+            Bounds bounds=shapes[0].bounds;foreach(var c in shapes.Skip(1))bounds.Encapsulate(c.bounds);
+            var baseRenderer=group.GetComponent<Renderer>();
+            if(baseRenderer==null||baseRenderer.sharedMaterial==null)throw new InvalidOperationException(id+" robot base material is missing.");
+            var origin=new Vector3(bounds.center.x,bounds.min.y-.005f,bounds.center.z);
+            var floors=Physics.RaycastAll(origin,Vector3.down,10f,~0,QueryTriggerInteraction.Ignore)
+                .Where(h=>h.normal.y>.9f&&!h.collider.transform.IsChildOf(group)&&h.collider.name.IndexOf("Floor",StringComparison.OrdinalIgnoreCase)>=0)
+                .OrderByDescending(h=>h.point.y).ToArray();
+            if(floors.Length==0)throw new InvalidOperationException(id+" has no floor surface below its tote.");
+            float floor=floors[0].point.y,height=bounds.min.y-floor;
+            if(height<=.01f)throw new InvalidOperationException(id+" tote is already on the floor.");
+            Vector3 size=new Vector3(Mathf.Max(bounds.size.x+.04f,baseRenderer.bounds.size.x),height,Mathf.Max(bounds.size.z+.04f,baseRenderer.bounds.size.z));
+            Vector3 position=new Vector3(bounds.center.x,floor+height*.5f,bounds.center.z);
+            return new{id,group,tote,bounds,floor,size,position,material=baseRenderer.sharedMaterial};
+        }).ToArray();
+        Directory.CreateDirectory("Temp/BonguriIntegrationBackup");
+        string backup="Temp/BonguriIntegrationBackup/before_tote_pedestals_"+DateTime.Now.ToString("yyyyMMdd_HHmmss")+".unity";
+        if(!EditorSceneManager.SaveScene(scene,backup,true))throw new IOException("Scene backup failed.");
+        Undo.IncrementCurrentGroup();int undo=Undo.GetCurrentGroup();Undo.SetCurrentGroupName("Add tote pedestals A B C");
+        var report=new StringBuilder("Tote pedestals\nBackup: "+backup+"\n");
+        var selected=new System.Collections.Generic.List<UnityEngine.Object>();
+        foreach(var p in plans)
+        {
+            string name="TotePedestal_"+p.id;
+            var existing=p.group.Find(name);
+            var cube=existing!=null?existing.gameObject:GameObject.CreatePrimitive(PrimitiveType.Cube);
+            if(existing==null)Undo.RegisterCreatedObjectUndo(cube,"Create tote pedestal");
+            else Undo.RecordObjects(new UnityEngine.Object[]{cube.transform,cube.GetComponent<Renderer>()},"Resize tote pedestal");
+            cube.name=name;
+            // Keep it outside ToteBase so its geometry/slot queries retain their original scope.
+            cube.transform.SetParent(null,true);cube.transform.SetPositionAndRotation(p.position,Quaternion.identity);cube.transform.localScale=p.size;
+            cube.transform.SetParent(p.group,true);cube.GetComponent<Renderer>().sharedMaterial=p.material;
+            Physics.SyncTransforms();var actual=cube.GetComponent<BoxCollider>().bounds;
+            if(Mathf.Abs(actual.max.y-p.bounds.min.y)>.001f||Mathf.Abs(actual.min.y-p.floor)>.001f)throw new InvalidOperationException(p.id+" pedestal contact verification failed.");
+            report.AppendLine(name+": position="+p.position.ToString("F4")+" size="+p.size.ToString("F4")+" floor="+p.floor.ToString("F4")+" toteBottom="+p.bounds.min.y.ToString("F4"));
+            selected.Add(cube);
+        }
+        Undo.CollapseUndoOperations(undo);EditorSceneManager.MarkSceneDirty(scene);
+        if(!EditorSceneManager.SaveScene(scene))throw new IOException("Scene save failed.");
+        File.WriteAllText("Temp/BonguriTotePedestals.txt",report.ToString());
+        Selection.objects=selected.ToArray();if(SceneView.lastActiveSceneView!=null)SceneView.lastActiveSceneView.FrameSelected();
+        Debug.Log("[Tote Pedestals] "+report);
     }
     [MenuItem("Tools/Bonguri/Integration/Match A B Loading Layout To C")]
     public static void MatchTerminalLayout() => MatchTerminalLayout(true);
