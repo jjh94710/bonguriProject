@@ -318,7 +318,30 @@ public sealed class BackArmIK : MonoBehaviour
         bool acceptable(float[] candidate) => model.HasRaisedElbow(candidate, contact.y + raisedElbowClearance) && model.WristAbovePlane(candidate, minimumWristPlane);
 
         //  1) 접촉 자세를 먼저 푼다 (정밀: 1.5 mm · 1.5°)
-        if (!model.Solve(contact, rotation, current, out var contactPose, out float error, out float angle, 1.5f, acceptable, .0015f))
+        bool solved = model.Solve(contact, rotation, current, out var contactPose, out float error, out float angle, 1.5f, acceptable, .0015f);
+        // Z-facing parcels can converge to the wrist-down branch even when a
+        // wrist-up solution exists. Seed alternate wrist branches, but accept
+        // exactly the same elbow, belt clearance and contact tolerances.
+        if (!solved && obstacle != null && Mathf.Abs(obstacle.transform.forward.z) > .9f &&
+            model.Solve(contact, rotation, current, out var freePose, out _, out _, 1.5f, null, .0015f))
+        {
+            foreach (int joint in new[] { 3, 4, 5, 0 })
+            {
+                foreach (float offset in new[] { -90f, 90f })
+                {
+                    var seedPose = (float[])freePose.Clone();
+                    var body = model.Joints[joint];
+                    var drive = body.xDrive;
+                    float lower = body.twistLock == ArticulationDofLock.FreeMotion ? -360f : drive.lowerLimit;
+                    float upper = body.twistLock == ArticulationDofLock.FreeMotion ? 360f : drive.upperLimit;
+                    seedPose[joint] = Mathf.Clamp(seedPose[joint] + offset, lower, upper);
+                    if (model.Solve(contact, rotation, seedPose, out var alternate, out _, out _, 1.5f, acceptable, .0015f))
+                    { contactPose = alternate; solved = true; break; }
+                }
+                if (solved) break;
+            }
+        }
+        if (!solved)
         {
             status = "흡착 접촉 자세 불가 · " + (error * 1000).ToString("F1") + "mm / " + angle.ToString("F1") + "도";
             return false;
@@ -653,7 +676,11 @@ public sealed class BackArmIK : MonoBehaviour
 
             if (!model.Solve(Vector3.Lerp(startPosition, endPosition, progress), Quaternion.Slerp(startRotation, endRotation, progress), seed,
                     out var next, out float error, out float angle,
-                    precisePlacement ? 1.5f : 5f,
+                    // Z held-transit samples use the same 2-degree orientation
+                    // tolerance as drive arrival. Contact and final placement
+                    // endpoints retain 1.5 degrees and their original position limits.
+                    precisePlacement ? (transitTolerance > 0 && targetBox != null && Mathf.Abs(targetBox.transform.forward.z) > .9f &&
+                        (step < steps || transitTolerance > .0015f) ? 2f : 1.5f) : 5f,
                     continuous,
                     transitTolerance > 0 ? (step == steps ? transitTolerance : .003f) : (precisePlacement ? .0015f : positionTolerance)))
             {

@@ -220,7 +220,7 @@ public static class BonguriPickupCheck
     static readonly HashSet<BoxInfo> oriented=new HashSet<BoxInfo>();
     [Serializable] sealed class Item
     {
-        public string robot,box,status;
+        public string robot,box,status,ikStatus;
         public bool attempted,attached,lifted,placed,busy;
         public float initialBottom,maxLift;
     }
@@ -233,10 +233,12 @@ public static class BonguriPickupCheck
         if(EditorApplication.isPlayingOrWillChangePlaymode)return;
         SessionState.SetBool("Bonguri.TerminalLoadingCheck",false);
         SessionState.SetBool(Key+".UniformX",uniformX);
+        SessionState.SetBool(Key+".DirectZ",false);
         SessionState.SetBool(Key,true);started=false;EditorApplication.isPlaying=true;
     }
+    public static void RunDirectZ(bool all=false){Run(false);SessionState.SetBool(Key+".DirectZ",true);SessionState.SetBool(Key+".AllRobots",all);}
     static void Log(string message,string stack,LogType type)
-    {if(message.StartsWith("[Cell")||message.StartsWith("[Conveyor")||message.StartsWith("[Pusher"))events.Add(Time.time.ToString("F3")+" "+message);}
+    {if(message.StartsWith("[Cell")||message.StartsWith("[Conveyor")||message.StartsWith("[Pusher")||message.StartsWith("[Pickup Path]"))events.Add(Time.time.ToString("F3")+" "+message);}
     static void Write(bool complete,string error)
     {
         Directory.CreateDirectory("results/pickup_check");
@@ -255,11 +257,25 @@ public static class BonguriPickupCheck
                 if(!cell.ValidateTerminalConfiguration(out string error))throw new Exception(error);
                 loaders=UnityEngine.Object.FindObjectsByType<BoxAttacher>(FindObjectsSortMode.None).Where(l=>l.name=="fr5_suctionA"||l.name=="fr5_suctionB"||l.name=="fr5_suctionC").OrderBy(l=>l.name).ToArray();
                 if(loaders.Length!=3)throw new Exception("Expected three loading robots.");
+                if(SessionState.GetBool(Key+".DirectZ",false)&&!SessionState.GetBool(Key+".AllRobots",false))loaders=loaders.Where(l=>l.name=="fr5_suctionC").ToArray();
                 items=loaders.Select(l=>new Item{robot=l.name}).ToArray();
                 var s=cell.Settings;s.faceTop=1;s.faceSide=0;s.faceBottom=0;s.feedInterval=3;
                 foreach(var line in UnityEngine.Object.FindObjectsByType<ConveyorLine>(FindObjectsSortMode.None).Where(l=>l.UsesSurfacePath))
                 {var edit=new SerializedObject(line);edit.FindProperty("speed").floatValue=1;edit.ApplyModifiedPropertiesWithoutUndo();}
-                UnityEngine.Random.InitState(20261103);cell.Run(3);
+                UnityEngine.Random.InitState(20261103);
+                if(SessionState.GetBool(Key+".DirectZ",false))
+                {
+                    foreach(var loader in loaders)
+                    {
+                        var line=UnityEngine.Object.FindObjectsByType<ConveyorLine>(FindObjectsSortMode.None).Single(l=>l.name=="Terminal"+loader.name.Last());
+                        var box=UnityEngine.Object.Instantiate(UnityEngine.Object.FindFirstObjectByType<BoxFeeder>().ParcelPrefab,new Vector3(100,100,100),Quaternion.identity);
+                        var body=box.GetComponent<Rigidbody>();body.isKinematic=true;
+                        if(!line.ValidateSurfacePath(out string why)||!line.TryGetSurfacePose(box,Quaternion.identity,line.PathLength,out var p,out var r,out why))throw new Exception(why);
+                        box.boxId="DIRECT-Z-"+loader.name.Last();box.name=box.boxId;body.position=p;body.rotation=r;box.transform.SetPositionAndRotation(p,r);Physics.SyncTransforms();
+                        if(!loader.TryLoadBox(box.GetComponent<BoxCollider>(),out why))throw new Exception(why);
+                    }
+                }
+                else cell.Run(3);
             }
             // Controlled comparison only: every newly fed parcel has its suction face along X.
             if(SessionState.GetBool(Key+".UniformX",false))
@@ -268,7 +284,7 @@ public static class BonguriPickupCheck
                     {var rotation=Quaternion.Euler(0,90,0);var body=box.GetComponent<Rigidbody>();if(body!=null)body.rotation=rotation;box.transform.rotation=rotation;}
             for(int i=0;i<loaders.Length;i++)
             {
-                var loader=loaders[i];var item=items[i];item.status=loader.Status;item.busy=loader.Busy;
+                var loader=loaders[i];var item=items[i];item.status=loader.Status;item.ikStatus=loader.armIK.Status;item.busy=loader.Busy;
                 var box=loader.targetBox;if(box==null)continue;
                 item.box=box.name;
                 if(!item.attempted)item.initialBottom=box.bounds.min.y;
@@ -277,8 +293,9 @@ public static class BonguriPickupCheck
                 if(loader.Attached){item.maxLift=Mathf.Max(item.maxLift,box.bounds.min.y-item.initialBottom);item.lifted|=item.maxLift>.05f;}
                 item.placed=loader.PlacedBoxes.Contains(box);
             }
-            bool done=items.All(i=>i.attempted&&!i.busy)&&cell.Processed>=items.Count(i=>i.placed);
-            bool timeout=EditorApplication.timeSinceStartup-began>150;
+            bool settled=SessionState.GetBool(Key+".DirectZ",false)||loaders.All(l=>l.targetBox==null||l.PlacedBoxes.Contains(l.targetBox)||l.targetBox.GetComponent<BoxInfo>().state!=BoxState.Loading);
+            bool done=settled&&items.All(i=>i.attempted&&!i.busy)&&(SessionState.GetBool(Key+".DirectZ",false)||cell.Processed>=items.Count(i=>i.placed));
+            bool timeout=EditorApplication.timeSinceStartup-began>(SessionState.GetBool(Key+".DirectZ",false)?600:150);
             if(done||timeout)
             {
                 Write(true,timeout?"Pickup check timed out.":null);SessionState.SetBool(Key,false);Application.logMessageReceived-=Log;

@@ -26,6 +26,8 @@ public static class BonguriIntegrationSetup
             if (command == "run-loading-check") BonguriTerminalLoadingCheck.Run();
             if (command == "run-pickup-check") BonguriPickupCheck.Run();
             if (command == "run-pickup-x-check") BonguriPickupCheck.Run(true);
+            if (command == "run-direct-z-check") BonguriPickupCheck.RunDirectZ();
+            if (command == "run-direct-z-all") BonguriPickupCheck.RunDirectZ(true);
             if (command == "run-route-check") BonguriTerminalLoadingCheck.RunRouteCheck();
             if (command == "audit-belt-paths") BonguriConveyorSurfaceSetup.Audit();
             if (command == "connect-belt-paths") BonguriConveyorSurfaceSetup.Connect();
