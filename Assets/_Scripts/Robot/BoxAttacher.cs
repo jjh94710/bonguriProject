@@ -42,7 +42,7 @@ public sealed class BoxAttacher : MonoBehaviour
     public BackArmIK armIK;
 
     [Tooltip("넣을 컨테이너 (ToteBase). 공정에서는 꼭 연결한다. 비우면 예전 단순 적재 경로로 돈다")]
-    [FormerlySerializedAs("tote")]
+    [FormerlySerializedAs("toto")]
     public ToteBase tote;
 
     [Tooltip("흡착컵 끝 기준점 (Tool Center Point). 상자 면에 닿는 점")]
