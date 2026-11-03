@@ -53,7 +53,7 @@ public class CellSettings : ScriptableObject
     [Tooltip("유효 지역 코드 (송장 번호 앞 2자리)")]
     public int[] regionCodes = { 11, 22, 33 };
 
-    [Tooltip("지역 코드별 주소 지역 이름. LabelReaderAgent 지역명 칸의 행동 번호와 같은 순서")]
+    [Tooltip("지역 코드별 주소 지역 이름. LabelReader가 돌려주는 지역명(서울 · 대전 · 부산, LabelRegion.onnx)과 글자가 같아야 한다")]
     public string[] regionNames = { "서울", "대전", "부산" };
 
     [Tooltip("지역 코드별 터미널")]
