@@ -90,7 +90,6 @@ public class CellController : MonoBehaviour
 
                         ///// : TODO : 
     //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
-    //      loaders (BoxAttacher[3])                 터미널 끝 흡착 로봇, 봉현님 (Check()와 알람 정지용)
     //      log (ProductionLog)                      세션 로그
     //      제한 시간: supplyTimeout 30, readTimeout 2, inferenceTimeout 1 (초)
 
@@ -256,7 +255,7 @@ public class CellController : MonoBehaviour
             StopTerminalLoaders();
 
                                 ///// : TODO : 
-            //  [다음 단계] 벨트 · 끝 로봇 3대 정지
+            //  [다음 단계] 벨트 정지 (ConveyorLine에 정지 명령을 만들 때)
 
             Debug.LogError($"[Cell] 알람 정지 | {type} {consecutiveErrors}회 연속", this);
         }
