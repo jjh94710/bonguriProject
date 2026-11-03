@@ -6704,7 +6704,7 @@ GameObject:
   - component: {fileID: 291876255}
   - component: {fileID: 291876254}
   m_Layer: 0
-  m_Name: SeparatorA
+  m_Name: SeparatorB
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6718,13 +6718,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 291876252}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -1.6440809, y: 0.93125933, z: 2.5462546}
   m_LocalScale: {x: 0.77658, y: 0.14202, z: 0.01}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1864491003}
-  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &291876254
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6737,7 +6737,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 74f7c3a228c11d04183fde3bc4da0609, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoxPusher
-  target: 1
+  target: 4
   divertPoint: {fileID: 0}
   pusherHead: {fileID: 0}
   toLine: {fileID: 0}
@@ -8523,7 +8523,7 @@ GameObject:
   - component: {fileID: 352732708}
   - component: {fileID: 352732707}
   m_Layer: 0
-  m_Name: SeparatorNG
+  m_Name: SeparatorC
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8537,13 +8537,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 352732705}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -0.3740809, y: 0.93125933, z: 2.5462546}
   m_LocalScale: {x: 0.77658, y: 0.14202, z: 0.01}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1864491003}
-  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &352732707
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9891,118 +9891,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 402531650383657694, guid: 393f8bc55d919ba4c8b08d9af7c89d4c, type: 3}
   m_PrefabInstance: {fileID: 446927942}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &451397498
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 451397502}
-  - component: {fileID: 451397501}
-  - component: {fileID: 451397500}
-  - component: {fileID: 451397499}
-  m_Layer: 0
-  m_Name: Cube (1)
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!65 &451397499
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 451397498}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
---- !u!23 &451397500
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 451397498}
-  m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: 93f9abc7836efd546a0c02adbb87a250, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &451397501
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 451397498}
-  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!4 &451397502
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 451397498}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 1.67, y: 0.605, z: 3.661}
-  m_LocalScale: {x: 0.25, y: 0.35724, z: 0.25}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &452033233
 GameObject:
   m_ObjectHideFlags: 0
@@ -11984,7 +11872,7 @@ GameObject:
   - component: {fileID: 551057186}
   - component: {fileID: 551057185}
   m_Layer: 0
-  m_Name: SeparatorC
+  m_Name: SeparatorA
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -12002,7 +11890,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 74f7c3a228c11d04183fde3bc4da0609, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoxPusher
-  target: 3
+  target: 4
   divertPoint: {fileID: 0}
   pusherHead: {fileID: 0}
   toLine: {fileID: 0}
@@ -32557,18 +32445,22 @@ MonoBehaviour:
   tcp: {fileID: 1822757907}
   targetBox: {fileID: 1999985239}
   gripper: {fileID: 1430163189}
+  placementSurface: {fileID: 0}
+  ik: {fileID: 0}
   approachHeight: 0.15
   liftHeight: 0.1
   degreesPerSecond: 15
+  metresPerSecond: 0.05
   positionTolerance: 0.008
   angleTolerance: 6
   travelClearance: 0.08
   boxClearance: 0.008
-  metresPerSecond: 0.05
   compensateRobotGravity: 1
   sideGrasp: 1
-  graspTiltDegrees: 0
   parcelGripCloseAmount: 0.025
+  closeTime: 3
+  liftCheck: 0.03
+  motionTimeout: 30
   initialJointAngles:
   - 3.486498
   - -77.19555
@@ -32576,9 +32468,9 @@ MonoBehaviour:
   - -57.650146
   - -89.96829
   - -86.548805
-  status: "Play \uD6C4 \uC774\uB3D9 \uBC84\uD2BC\uC744 \uB204\uB974\uC138\uC694."
-  armIK: {fileID: 1430163191}
-  placementSurface: {fileID: 0}
+  testLine: {fileID: 0}
+  showTestPanel: 0
+  guiPosition: {x: 760, y: 10}
 --- !u!114 &1430163191
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -40149,22 +40041,26 @@ MonoBehaviour:
   tcp: {fileID: 589455076}
   targetBox: {fileID: 1999985239}
   gripper: {fileID: 1749693317}
+  placementSurface: {fileID: 0}
+  ik: {fileID: 0}
   approachHeight: 0.12
   liftHeight: 0.1
   degreesPerSecond: 20
+  metresPerSecond: 0.06
   positionTolerance: 0.008
   angleTolerance: 4
   travelClearance: 0.2
   boxClearance: 0.008
-  metresPerSecond: 0.06
   compensateRobotGravity: 1
   sideGrasp: 1
-  graspTiltDegrees: 0
   parcelGripCloseAmount: 0.025
+  closeTime: 3
+  liftCheck: 0.03
+  motionTimeout: 30
   initialJointAngles: []
-  status: "Play \uD6C4 \uC774\uB3D9 \uBC84\uD2BC\uC744 \uB204\uB974\uC138\uC694."
-  armIK: {fileID: 1749693319}
-  placementSurface: {fileID: 0}
+  testLine: {fileID: 0}
+  showTestPanel: 0
+  guiPosition: {x: 760, y: 10}
 --- !u!114 &1749693319
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -42010,26 +41906,6 @@ PrefabInstance:
     - target: {fileID: 4190819128946597515, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
       propertyPath: m_ParentAnchorPosition.y
       value: 0.15200001
-      objectReference: {fileID: 0}
-    - target: {fileID: 4190819128946597515, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
-      propertyPath: m_ParentAnchorRotation.w
-      value: -0.0000014305115
-      objectReference: {fileID: 0}
-    - target: {fileID: 4190819128946597515, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
-      propertyPath: m_ParentAnchorRotation.x
-      value: 0.0000009834766
-      objectReference: {fileID: 0}
-    - target: {fileID: 4190819128946597515, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
-      propertyPath: m_ParentAnchorRotation.y
-      value: 0.55735517
-      objectReference: {fileID: 0}
-    - target: {fileID: 4190819128946597515, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
-      propertyPath: m_ParentAnchorRotation.z
-      value: -0.8302741
-      objectReference: {fileID: 0}
-    - target: {fileID: 6047610440783030144, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
-      propertyPath: m_ParentAnchorPosition.x
-      value: -0.00000081314727
       objectReference: {fileID: 0}
     - target: {fileID: 4190819128946597515, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
       propertyPath: m_ParentAnchorRotation.w
@@ -46216,22 +46092,26 @@ MonoBehaviour:
   tcp: {fileID: 1707800560}
   targetBox: {fileID: 1999985239}
   gripper: {fileID: 1952875732}
+  placementSurface: {fileID: 0}
+  ik: {fileID: 0}
   approachHeight: 0.12
   liftHeight: 0.1
   degreesPerSecond: 20
+  metresPerSecond: 0.06
   positionTolerance: 0.008
   angleTolerance: 4
   travelClearance: 0.2
   boxClearance: 0.008
-  metresPerSecond: 0.06
   compensateRobotGravity: 1
   sideGrasp: 1
-  graspTiltDegrees: 0
   parcelGripCloseAmount: 0.025
+  closeTime: 3
+  liftCheck: 0.03
+  motionTimeout: 30
   initialJointAngles: []
-  status: "Play \uD6C4 \uC774\uB3D9 \uBC84\uD2BC\uC744 \uB204\uB974\uC138\uC694."
-  armIK: {fileID: 1952875734}
-  placementSurface: {fileID: 0}
+  testLine: {fileID: 0}
+  showTestPanel: 0
+  guiPosition: {x: 760, y: 10}
 --- !u!114 &1952875734
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -49764,7 +49644,6 @@ SceneRoots:
   - {fileID: 1881816706}
   - {fileID: 1253625637}
   - {fileID: 1814607043}
-  - {fileID: 451397502}
   - {fileID: 19354816}
   - {fileID: 1959579295}
   - {fileID: 475522988}
