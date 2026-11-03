@@ -217,6 +217,7 @@ public static class BonguriPickupCheck
     static double began,nextRecord;
     static bool started;
     static readonly List<string> events=new List<string>();
+    static readonly HashSet<BoxInfo> oriented=new HashSet<BoxInfo>();
     [Serializable] sealed class Item
     {
         public string robot,box,status;
@@ -226,10 +227,12 @@ public static class BonguriPickupCheck
     [Serializable] sealed class Report{public bool complete;public string error;public int processed;public Item[] robots;}
     static BonguriPickupCheck(){EditorApplication.update+=Tick;}
     [MenuItem("Tools/Bonguri/Integration/Verify Actual Suction Pickup")]
-    public static void Run()
+    public static void Run() => Run(false);
+    public static void Run(bool uniformX)
     {
         if(EditorApplication.isPlayingOrWillChangePlaymode)return;
         SessionState.SetBool("Bonguri.TerminalLoadingCheck",false);
+        SessionState.SetBool(Key+".UniformX",uniformX);
         SessionState.SetBool(Key,true);started=false;EditorApplication.isPlaying=true;
     }
     static void Log(string message,string stack,LogType type)
@@ -247,7 +250,7 @@ public static class BonguriPickupCheck
         {
             if(!started)
             {
-                started=true;began=EditorApplication.timeSinceStartup;nextRecord=0;events.Clear();Application.logMessageReceived+=Log;
+                started=true;began=EditorApplication.timeSinceStartup;nextRecord=0;events.Clear();oriented.Clear();Application.logMessageReceived+=Log;
                 cell=UnityEngine.Object.FindFirstObjectByType<CellController>();
                 if(!cell.ValidateTerminalConfiguration(out string error))throw new Exception(error);
                 loaders=UnityEngine.Object.FindObjectsByType<BoxAttacher>(FindObjectsSortMode.None).Where(l=>l.name=="fr5_suctionA"||l.name=="fr5_suctionB"||l.name=="fr5_suctionC").OrderBy(l=>l.name).ToArray();
@@ -258,6 +261,11 @@ public static class BonguriPickupCheck
                 {var edit=new SerializedObject(line);edit.FindProperty("speed").floatValue=1;edit.ApplyModifiedPropertiesWithoutUndo();}
                 UnityEngine.Random.InitState(20261103);cell.Run(3);
             }
+            // Controlled comparison only: every newly fed parcel has its suction face along X.
+            if(SessionState.GetBool(Key+".UniformX",false))
+                foreach(var box in UnityEngine.Object.FindObjectsByType<BoxInfo>(FindObjectsSortMode.None).Where(b=>!string.IsNullOrEmpty(b.boxId)))
+                    if(oriented.Add(box))
+                    {var rotation=Quaternion.Euler(0,90,0);var body=box.GetComponent<Rigidbody>();if(body!=null)body.rotation=rotation;box.transform.rotation=rotation;}
             for(int i=0;i<loaders.Length;i++)
             {
                 var loader=loaders[i];var item=items[i];item.status=loader.Status;item.busy=loader.Busy;
@@ -269,7 +277,7 @@ public static class BonguriPickupCheck
                 if(loader.Attached){item.maxLift=Mathf.Max(item.maxLift,box.bounds.min.y-item.initialBottom);item.lifted|=item.maxLift>.05f;}
                 item.placed=loader.PlacedBoxes.Contains(box);
             }
-            bool done=items.All(i=>i.attempted&&!i.busy);
+            bool done=items.All(i=>i.attempted&&!i.busy)&&cell.Processed>=items.Count(i=>i.placed);
             bool timeout=EditorApplication.timeSinceStartup-began>150;
             if(done||timeout)
             {
