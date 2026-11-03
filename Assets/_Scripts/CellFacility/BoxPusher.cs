@@ -7,7 +7,7 @@ using UnityEngine;
 //      - 분기 지점마다 하나씩 둔다 (NG, A, C). 목적지가 B인 상자는 아무도 밀지 않아 그대로 직진한다.
 //      - 상자가 분기 지점에 오면 ConveyorLine이 TryPush()를 부른다. 담당이면 구간에서 빼고(TakeAway) 밀기 시작.
 //      - 판과 상자를 스크립트로 함께 옮긴다. 벨트(ConveyorLine)와 같은 방식이라 상자는 kinematic 그대로다.
-//      - 다 밀면 toLine.Feed(box)로 옆 벨트에 넘기고, 판을 원위치로 되돌린다.
+//      - 다 밀면 toLine.Feed(box)로 옆 벨트에 넘기거나(A · C), toTote.Add(box)로 NG 토트에 넣고(NG), 판을 원위치로 되돌린다.
 //
 //  [사용] 빈 오브젝트 "Pusher_A" 등에 붙이고, 판(Head)과 분기 지점(DivertPoint)을 자식으로 둔다.
 //         이 오브젝트의 앞쪽(파란 화살표, +Z)이 미는 방향이다.
@@ -19,6 +19,7 @@ using UnityEngine;
 //      * pushDuration은 판이 끝까지 나가는 시간이다. 돌아올 때도 같은 속도로 온다.
 //      * 받을 벨트 입구가 차 있으면 밀지 않는다. ConveyorLine이 상자를 분기 지점에 세워 두고, waitLimit을 넘기면 "분류 실패"로 지나가게 한다.
 //      * 박봉현님 10/30 BoxPusher(실물 벨트 · 물리 밀기 · 수거함 모드)를 이 방식으로 바꿨다.
+//      * To Line과 To Tote가 모두 비어 있으면 밀어낸 상자를 지운다 (다음 구간 없는 ConveyorLine 출구와 같음).
 //  ============================================================
 public class BoxPusher : MonoBehaviour
 {
@@ -36,8 +37,8 @@ public class BoxPusher : MonoBehaviour
     [Tooltip("(선택) 밀어낸 상자를 넘길 벨트 (LaneA, LaneC). 입구를 밀린 상자가 멈추는 자리(노란 선 끝)에 둔다")]
     [SerializeField] ConveyorLine toLine;
 
-    ///// : TODO :
-    //  [ToteBase 구현 후] toTote (ToteBase) 칸을 연다. NG 상자는 toTote.Add(box)로 넣는다.
+    [Tooltip("(선택) 밀어낼 상자를 넣을 NG 토트 (NG 푸셔 → NgTote). To Line이 비어 있을 때 쓴다")]
+    [SerializeField] NgTote toTote;
 
     //  ---------------- 동작 ----------------
     [Header("동작")]
@@ -96,13 +97,13 @@ public class BoxPusher : MonoBehaviour
     void Start()
     {
         if (divertPoint == null)
-        { Debug.LogWarning($"[Pusher] {name}: Divert Point가 비어 있습니다. 상자를 세우지도 밀지도 않습니다.", this); }
+            { Debug.LogWarning($"[Pusher] {name}: Divert Point가 비어 있습니다. 상자를 세우지도 밀지도 않습니다.", this); }
 
         if (target == Destination.None || target == Destination.B)
-        { Debug.LogWarning($"[Pusher] {name}: Target이 {target}입니다. B는 직진이라 푸셔가 필요 없습니다. NG · A · C 중 하나로 바꾸세요.", this); }
+            { Debug.LogWarning($"[Pusher] {name}: Target이 {target}입니다. B는 직진이라 푸셔가 필요 없습니다. NG · A · C 중 하나로 바꾸세요.", this); }
 
         if (toLine == null && target != Destination.NG)
-        { Debug.LogWarning($"[Pusher] {name}: To Line이 비어 있습니다. 밀어낸 상자는 지워집니다.", this); }
+            { Debug.LogWarning($"[Pusher] {name}: To Line이 비어 있습니다. 밀어낸 상자는 지워집니다.", this); }
     }
 
 
@@ -159,7 +160,9 @@ public class BoxPusher : MonoBehaviour
             if (box != null && boxStep > 0f) { ConveyorLine.MoveBox(box, direction * boxStep); }
         }
 
-        //  2) 받을 벨트에 넘긴다. 입구가 차 있으면 빌 때까지 기다린다 (TryPush()가 확인했으므로 보통 바로 넘어간다)
+        //  2) 받을 곳에 넘긴다.
+        ///  벨트: 입구가 차 있으면 빌 때까지 기다린다 (TryPush()가 확인했으므로 보통 바로 넘어간다)
+        ///  토트: 다음 칸에 놓고 집계한다 (NgTote.Add -> CellController.Finish)
         if (box != null)
         {
             PushedCount++;
@@ -168,10 +171,13 @@ public class BoxPusher : MonoBehaviour
                 Debug.Log($"[Pusher] {name}: {box.boxId} 밀어냄 → {toLine.name} | 목적지 {box.destination}", this);
                 while (box != null && !toLine.Feed(box)) { yield return null; }
             }
+            else if(toTote != null)
+            {
+                Debug.Log($"[Pusher] {name}: {box.boxId} 밀어냄 → {toTote.name} | 목적지 {box.destination} · 사유 {box.reason}", this);
+                toTote.Add(box);
+            }
             else
             {
-                ///// : TODO :
-                //  [ToteBase 구현 후] toTote.Add(box). 지금은 받을 곳이 없어 지운다 (다음 구간 없는 ConveyorLine 출구와 같음).
                 Debug.Log($"[Pusher] {name}: {box.boxId} 밀어냄 (받을 곳 없음, 지움) | 목적지 {box.destination}", this);
                 Destroy(box.gameObject);
             }
