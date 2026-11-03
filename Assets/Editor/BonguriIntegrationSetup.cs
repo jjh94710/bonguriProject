@@ -21,7 +21,8 @@ public static class BonguriIntegrationSetup
         {
             if (command == "audit") Audit();
             if (command == "setup") Setup();
-            if (command == "run-top" || command == "run-side")
+            if (command == "connect-totes") ConnectTerminalTotes();
+            if (command == "run-top" || command == "run-side" || command == "run-random")
             {
                 SessionState.SetString("BonguriIntegration.Run", command);
                 EditorApplication.isPlaying = true;
@@ -35,8 +36,64 @@ public static class BonguriIntegrationSetup
         if (!EditorApplication.isPlaying || Time.time < 1) return;
         EditorApplication.update -= StartRequestedRun;
         var panel = UnityEngine.Object.FindFirstObjectByType<BonguriIntegrationPanel>();
-        if (panel != null) panel.RunSmoke(SessionState.GetString("BonguriIntegration.Run", "") == "run-side");
+        if (panel != null)
+        {
+            string command = SessionState.GetString("BonguriIntegration.Run", "");
+            if (command == "run-random") panel.RunRandomDemo();
+            else panel.RunSmoke(command == "run-side");
+        }
         SessionState.EraseString("BonguriIntegration.Run");
+    }
+    [MenuItem("Tools/Bonguri/Integration/Connect Terminal Totes A B C")]
+    public static void ConnectTerminalTotes()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode) throw new InvalidOperationException("Stop Play before connecting terminal totes.");
+        var scene = SceneManager.GetActiveScene();
+        if (scene.path != "Assets/Scenes/bongyuri.unity") throw new InvalidOperationException("Open bongyuri before connecting terminal totes.");
+        var transforms = scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<Transform>(true)).ToArray();
+        var pairs = new System.Collections.Generic.List<(string terminal, BoxAttacher loader, ToteBase tote)>();
+        // Validate all three pairs before changing any scene references.
+        foreach (string terminal in new[] { "A", "B", "C" })
+        {
+            var group = transforms.Single(t => t.name == terminal + "PartRobot");
+            var loader = group.GetComponentsInChildren<BoxAttacher>(true).Single();
+            var tote = group.GetComponentsInChildren<ToteBase>(true).Single();
+            if (loader.name != "fr5_suction" + terminal || tote.name != "ParcelContainer_2x2x2_8" + terminal)
+                throw new InvalidOperationException(terminal + " robot/tote names do not match the terminal group.");
+            if (loader.tcp == null || loader.suctionCup == null || loader.armIK == null)
+                throw new InvalidOperationException(terminal + " robot requires TCP, suction cup and BackArmIK.");
+            if (tote.slots == null || tote.slots.Length != tote.Capacity || tote.slots.Any(s => s == null || !s.IsChildOf(tote.transform)) || tote.slots.Distinct().Count() != tote.Capacity)
+                throw new InvalidOperationException(terminal + " tote requires eight unique child slots.");
+            pairs.Add((terminal, loader, tote));
+        }
+        string folder = "Temp/BonguriIntegrationBackup";
+        Directory.CreateDirectory(folder);
+        string backup = folder + "/before_tote_connections_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".unity";
+        if (!EditorSceneManager.SaveScene(scene, backup, true)) throw new IOException("Scene backup failed.");
+        Undo.IncrementCurrentGroup();
+        int undoGroup = Undo.GetCurrentGroup();
+        Undo.SetCurrentGroupName("Connect terminal totes A B C");
+        var report = new StringBuilder("Terminal tote connections\nBackup: " + backup + "\n");
+        foreach (var pair in pairs)
+        {
+            Undo.RecordObjects(new UnityEngine.Object[] { pair.loader, pair.tote }, "Connect terminal tote");
+            pair.loader.toto = pair.tote;
+            pair.loader.container = pair.tote.transform;
+            pair.loader.slots = (Transform[])pair.tote.slots.Clone();
+            pair.tote.loader = pair.loader;
+            EditorUtility.SetDirty(pair.loader); EditorUtility.SetDirty(pair.tote);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(pair.loader);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(pair.tote);
+            if (pair.loader.toto != pair.tote || pair.tote.loader != pair.loader || pair.loader.container != pair.tote.transform || !pair.loader.slots.SequenceEqual(pair.tote.slots))
+                throw new InvalidOperationException(pair.terminal + " connection verification failed.");
+            report.AppendLine(pair.terminal + ": " + pair.loader.name + " <-> " + pair.tote.name + ", slots=" + pair.loader.slots.Length + ", robotActive=" + pair.loader.gameObject.activeInHierarchy + ", toteActive=" + pair.tote.gameObject.activeInHierarchy);
+            foreach (var slot in pair.loader.slots) report.AppendLine("  " + slot.name + " " + slot.position.ToString("F4"));
+        }
+        Undo.CollapseUndoOperations(undoGroup);
+        EditorSceneManager.MarkSceneDirty(scene);
+        if (!EditorSceneManager.SaveScene(scene)) throw new IOException("Scene save failed.");
+        File.WriteAllText("Temp/BonguriTerminalTotes.txt", report.ToString());
+        Debug.Log("[Integration] Connected and verified all three terminal totes (8 slots each).");
     }
     [MenuItem("Tools/Bonguri/Integration/Connect Bongyuri Process")]
     public static void Setup()
