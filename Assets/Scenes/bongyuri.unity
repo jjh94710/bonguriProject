@@ -6979,7 +6979,7 @@ MonoBehaviour:
   divertPoint: {fileID: 1065400861}
   pusherHead: {fileID: 291876253}
   toLine: {fileID: 320798661}
-  pushDistance: 1.4919999
+  pushDistance: 0.85
   pushDuration: 0.6
   waitLimit: 10
   showTestButtons: 0
@@ -8764,7 +8764,7 @@ MonoBehaviour:
   divertPoint: {fileID: 586729734}
   pusherHead: {fileID: 352732706}
   toLine: {fileID: 180536049}
-  pushDistance: 1.2919999
+  pushDistance: 0.85
   pushDuration: 0.6
   waitLimit: 10
   showTestButtons: 0
@@ -13204,10 +13204,10 @@ MonoBehaviour:
   divertPoint: {fileID: 1527029352}
   pusherHead: {fileID: 551057190}
   toLine: {fileID: 107953978}
-  pushDistance: 1.358
+  pushDistance: 0.85
   pushDuration: 0.6
   waitLimit: 10
-  showTestButtons: 0
+  showTestButtons: 1
   guiPosition: {x: 510, y: 10}
 --- !u!54 &551057186
 Rigidbody:
@@ -17733,6 +17733,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 1772069649391730465, guid: 8e7b5401ff7dba248b01e650f6ed5ef0, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1430163191}
+    - targetCorrespondingSourceObject: {fileID: 1772069649391730465, guid: 8e7b5401ff7dba248b01e650f6ed5ef0, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1430163194}
   m_SourcePrefab: {fileID: 100100000, guid: 8e7b5401ff7dba248b01e650f6ed5ef0, type: 3}
 --- !u!1 &720804316
 GameObject:
@@ -33880,7 +33883,7 @@ MonoBehaviour:
   targetBox: {fileID: 0}
   gripper: {fileID: 1430163189}
   placementSurface: {fileID: 1187299800}
-  ik: {fileID: 1430163191}
+  ik: {fileID: 1430163194}
   approachHeight: 0.15
   liftHeight: 0.1
   degreesPerSecond: 15
@@ -33917,6 +33920,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a53832c73a01463b9158b9f8155af24c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FrontArmIK
+  tcp: {fileID: 0}
+  raisedElbowClearance: 0
+  minimumWristPlane: -10000
+  driveStiffness: 100000
+  driveDamping: 10000
+  driveForceLimit: 1000
+--- !u!114 &1430163194
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1430163186}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b2ad1f4c26c45c981e9dc1555bd8039, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ArmIK
   tcp: {fileID: 0}
   raisedElbowClearance: 0
   minimumWristPlane: -10000

@@ -115,7 +115,7 @@ public static class BonguriIntegrationSetup
     static void ConfigurePusher(BoxPusher p, Destination destination, ConveyorLine to, Vector3 divert, GameObject root)
     {
         Set(p, "target", (int)destination); Set(p, "divertPoint", Point(root, p.name + "_Divert", divert)); Set(p, "pusherHead", p.transform); Set(p, "toLine", to);
-        var entry = (Transform)Ref(to, "entry"); Set(p, "pushDistance", Mathf.Abs(entry.position.z - divert.z));
+        // 이동 거리는 BoxPusher Inspector 설정을 유지한다.
     }
     [MenuItem("Tools/Bonguri/Integration/Audit Bongyuri Scene")]
     public static void Audit()

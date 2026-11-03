@@ -42,7 +42,7 @@ public class BoxPusher : MonoBehaviour
     //  ---------------- 동작 ----------------
     [Header("동작")]
     [Tooltip("상자를 미는 거리 m. 분기 지점에서 받을 벨트 입구까지 (default: 0.25)")]
-    [Min(0.01f)][SerializeField] float pushDistance = 0.25f;
+    [Min(0.01f)][SerializeField] float pushDistance = 0.8f;
 
     [Tooltip("판이 끝까지 나가는 시간(초). 돌아올 때도 같은 속도 (default: 0.6)")]
     [Min(0.05f)][SerializeField] float pushDuration = 0.6f;
