@@ -24,10 +24,15 @@ public static class BonguriIntegrationSetup
             if (command == "connect-totes") ConnectTerminalTotes();
             if (command == "connect-loading") ConnectTerminalLoading();
             if (command == "run-loading-check") BonguriTerminalLoadingCheck.Run();
+            if (command == "run-pickup-check") BonguriPickupCheck.Run();
+            if (command == "run-pickup-x-check") BonguriPickupCheck.Run(true);
             if (command == "run-route-check") BonguriTerminalLoadingCheck.RunRouteCheck();
             if (command == "audit-belt-paths") BonguriConveyorSurfaceSetup.Audit();
             if (command == "connect-belt-paths") BonguriConveyorSurfaceSetup.Connect();
             if (command == "run-surface-check") BonguriConveyorSurfaceCheck.Run();
+            if (command == "repair-b-entry") BonguriConveyorSurfaceSetup.RepairBEntry();
+            if (command == "audit-loading-layout") MatchTerminalLayout(false);
+            if (command == "match-loading-layout") MatchTerminalLayout(true);
             if (command == "run-top" || command == "run-side" || command == "run-random")
             {
                 SessionState.SetString("BonguriIntegration.Run", command);
@@ -49,6 +54,55 @@ public static class BonguriIntegrationSetup
             else panel.RunSmoke(command == "run-side");
         }
         SessionState.EraseString("BonguriIntegration.Run");
+    }
+    [MenuItem("Tools/Bonguri/Integration/Match A B Loading Layout To C")]
+    public static void MatchTerminalLayout() => MatchTerminalLayout(true);
+    static void MatchTerminalLayout(bool apply)
+    {
+        if(EditorApplication.isPlayingOrWillChangePlaymode)throw new InvalidOperationException("Stop Play first.");
+        var scene=SceneManager.GetActiveScene();
+        if(scene.path!="Assets/Scenes/bongyuri.unity")throw new InvalidOperationException("Open bongyuri first.");
+        var all=scene.GetRootGameObjects().SelectMany(r=>r.GetComponentsInChildren<Transform>(true)).ToArray();
+        var layouts=new[]{"A","B","C"}.Select(id=>{
+            var group=all.Single(t=>t.name==id+"PartRobot");
+            var loader=group.GetComponentsInChildren<BoxAttacher>(true).Single();
+            var line=all.Single(t=>t.name=="Terminal"+id).GetComponent<ConveyorLine>();
+            var edit=new SerializedObject(line);var belts=edit.FindProperty("beltSurfaces");
+            var last=(Collider)belts.GetArrayElementAtIndex(belts.arraySize-1).objectReferenceValue;
+            if(loader.toto==null||line.StopPoint==null||last==null)throw new InvalidOperationException(id+" missing loading layout.");
+            var frame=Quaternion.LookRotation(Vector3.ProjectOnPlane(-last.transform.forward,Vector3.up).normalized,Vector3.up);
+            return new {id,group,loader,line,frame,tote=loader.toto.transform};
+        }).ToArray();
+        var c=layouts[2];var report=new StringBuilder("Match loading layout to current C\n");
+        foreach(var p in layouts)
+            report.AppendLine(p.id+" before: stop="+p.line.StopPoint.position.ToString("F4")+" robot="+p.loader.transform.position.ToString("F4")+" rotation="+p.loader.transform.eulerAngles.ToString("F3")+" scale="+p.loader.transform.lossyScale.ToString("F3")+" tote="+p.tote.position.ToString("F4")+" relativeRobot="+(Quaternion.Inverse(p.frame)*(p.loader.transform.position-p.line.StopPoint.position)).ToString("F4"));
+        if(apply)
+        {
+            Directory.CreateDirectory("Temp/BonguriIntegrationBackup");
+            string backup="Temp/BonguriIntegrationBackup/before_match_loading_C_"+DateTime.Now.ToString("yyyyMMdd_HHmmss")+".unity";
+            if(!EditorSceneManager.SaveScene(scene,backup,true))throw new IOException("Backup failed.");
+            report.AppendLine("Backup: "+backup);
+            Undo.IncrementCurrentGroup();int undo=Undo.GetCurrentGroup();Undo.SetCurrentGroupName("Match A B loading layout to C");
+            foreach(var p in layouts.Take(2))
+            {
+                Quaternion basis=p.frame*Quaternion.Inverse(c.frame);
+                Vector3 desiredRobot=p.line.StopPoint.position+basis*(c.loader.transform.position-c.line.StopPoint.position);
+                Quaternion desiredRotation=basis*c.loader.transform.rotation;
+                Quaternion delta=desiredRotation*Quaternion.Inverse(p.loader.transform.rotation);
+                Vector3 desiredGroup=desiredRobot+delta*(p.group.position-p.loader.transform.position);
+                Vector3 desiredTote=p.line.StopPoint.position+basis*(c.tote.position-c.line.StopPoint.position);
+                Quaternion toteRotation=basis*c.tote.rotation;
+                Undo.RecordObjects(new UnityEngine.Object[]{p.group,p.tote},"Match robot base and tote to C");
+                p.group.SetPositionAndRotation(desiredGroup,delta*p.group.rotation);
+                p.tote.SetPositionAndRotation(desiredTote,toteRotation);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(p.group);PrefabUtility.RecordPrefabInstancePropertyModifications(p.tote);
+                if(Vector3.Distance(p.loader.transform.position,desiredRobot)>.001f||Quaternion.Angle(p.loader.transform.rotation,desiredRotation)>.1f)throw new InvalidOperationException(p.id+" layout verification failed.");
+                report.AppendLine(p.id+" after: robot="+p.loader.transform.position.ToString("F4")+" tote="+p.tote.position.ToString("F4")+" relativeRobot="+(Quaternion.Inverse(p.frame)*(p.loader.transform.position-p.line.StopPoint.position)).ToString("F4"));
+            }
+            Physics.SyncTransforms();Undo.CollapseUndoOperations(undo);EditorSceneManager.MarkSceneDirty(scene);
+            if(!EditorSceneManager.SaveScene(scene))throw new IOException("Scene save failed.");
+        }
+        File.WriteAllText("Temp/BonguriLoadingLayout.txt",report.ToString());Debug.Log("[Loading Layout] "+report);
     }
     [MenuItem("Tools/Bonguri/Integration/Connect Terminal Totes A B C")]
     public static void ConnectTerminalTotes()
