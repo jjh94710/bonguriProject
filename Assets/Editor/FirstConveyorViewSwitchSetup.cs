@@ -1,0 +1,21 @@
+using System;
+using System.IO;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+[InitializeOnLoad] public static class FirstConveyorViewSwitchSetup {
+ static FirstConveyorViewSwitchSetup(){EditorApplication.update+=Poll;}
+ static void Poll(){if(EditorApplication.isPlayingOrWillChangePlaymode||EditorApplication.isCompiling||EditorApplication.isUpdating||!File.Exists("Temp/FirstConveyorViewSwitch.request"))return;File.Delete("Temp/FirstConveyorViewSwitch.request");try{
+ var scene=UnityEngine.SceneManagement.SceneManager.GetActiveScene();var cams=UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsInactive.Include).Where(c=>c.gameObject.scene==scene).ToArray();var first=cams.Single(c=>c.name=="CameraFirstConveyor");var top=cams.Single(c=>c.name=="CameraFirstCameraTop");var root=GameObject.Find("CameraNavigationUI");if(root==null)throw new Exception("CameraNavigationUI missing");
+ string backup=Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)+"/UnityBackups/bonguriProject/ClickCamera/"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+"/bongyuri.unity";Directory.CreateDirectory(Path.GetDirectoryName(backup));EditorSceneManager.SaveScene(scene,backup,true);
+ var old=root.GetComponent<SideCameraNavigation>();if(old!=null)old.enabled=false;
+ var area=Button(root.transform,"FirstConveyorClickArea");var ar=area.GetComponent<RectTransform>();ar.anchorMin=new Vector2(.385f,.135f);ar.anchorMax=new Vector2(.58f,.505f);ar.offsetMin=ar.offsetMax=Vector2.zero;area.GetComponent<Image>().color=Color.clear;area.transition=Selectable.Transition.None;
+ var back=Button(root.transform,"FirstConveyorBackButton");var br=back.GetComponent<RectTransform>();br.anchorMin=br.anchorMax=new Vector2(1,0);br.pivot=new Vector2(1,0);br.anchoredPosition=new Vector2(-24,24);br.sizeDelta=new Vector2(200,64);var bi=back.GetComponent<Image>();bi.color=new Color(.04f,.07f,.11f,.8f);bi.sprite=AssetDatabase.LoadAssetAtPath<Sprite>("Assets/_Scripts/UI/PanelRoundedFill.png");bi.type=Image.Type.Sliced;
+ var text=back.GetComponentInChildren<Text>(true);if(text==null){var g=new GameObject("Text",typeof(RectTransform),typeof(Text));g.transform.SetParent(back.transform,false);text=g.GetComponent<Text>();var tr=g.GetComponent<RectTransform>();tr.anchorMin=Vector2.zero;tr.anchorMax=Vector2.one;tr.offsetMin=tr.offsetMax=Vector2.zero;}text.font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");text.text="< Back";text.fontSize=24;text.alignment=TextAnchor.MiddleCenter;text.color=Color.white;text.raycastTarget=false;back.gameObject.SetActive(false);
+ var component=root.GetComponent<FirstConveyorViewSwitch>();if(component==null)component=root.AddComponent<FirstConveyorViewSwitch>();var so=new SerializedObject(component);so.FindProperty("firstCamera").objectReferenceValue=first;so.FindProperty("topCamera").objectReferenceValue=top;so.FindProperty("areaButton").objectReferenceValue=area;so.FindProperty("backButton").objectReferenceValue=back;so.FindProperty("hudCanvas").objectReferenceValue=GameObject.Find("FactoryHUD").GetComponent<Canvas>();var others=cams.Where(c=>c!=first&&c!=top&&c.targetTexture==null&&(c.transform.parent==first.transform.parent||c.name.StartsWith("CameraSideUi"))).ToArray();var a=so.FindProperty("otherCameras");a.arraySize=others.Length;for(int i=0;i<others.Length;i++)a.GetArrayElementAtIndex(i).objectReferenceValue=others[i];so.ApplyModifiedPropertiesWithoutUndo();
+ first.enabled=true;top.enabled=false;root.GetComponent<Canvas>().targetDisplay=first.targetDisplay;EditorSceneManager.MarkSceneDirty(scene);EditorSceneManager.SaveScene(scene);File.WriteAllText("Temp/FirstConveyorViewSwitchResult.txt","OK: click area -> CameraFirstCameraTop; Back -> CameraFirstConveyor; saved");
+ }catch(Exception e){File.WriteAllText("Temp/FirstConveyorViewSwitchResult.txt",e.ToString());Debug.LogException(e);}}
+ static Button Button(Transform root,string name){var t=root.Find(name);GameObject g;if(t==null){g=new GameObject(name,typeof(RectTransform),typeof(Image),typeof(Button));g.transform.SetParent(root,false);}else g=t.gameObject;var b=g.GetComponent<Button>();b.onClick=new Button.ButtonClickedEvent();b.GetComponent<Image>().raycastTarget=true;return b;}
+}
