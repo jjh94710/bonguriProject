@@ -1,0 +1,28 @@
+{
+  "models_sha256": {
+    "LabelNumber.onnx": "a7226791ad1cef9a32684e602d77fec549e9a4fc87dff0b70351215dac89b8fa",
+    "LabelRegion.onnx": "dcfcf438310690e512b451411df101d3d051bd0f0377cec52692075b1bd121cb"
+  },
+  "number_input": [
+    1,
+    1,
+    32,
+    186
+  ],
+  "region_input": [
+    1,
+    1,
+    32,
+    96
+  ],
+  "normalization": "grayscale /255 top-down",
+  "regions": [
+    "서울",
+    "대전",
+    "부산"
+  ],
+  "ctc_blank": 10,
+  "min_confidence": 0.8,
+  "training_seed": 20261106,
+  "unity_evaluation_seed": 20261107
+}
