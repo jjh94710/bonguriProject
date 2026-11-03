@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 //  ============================================================
 //  BoxAttacher
@@ -17,6 +18,8 @@ using UnityEngine;
 //              (X Direction · Y Direction 칸의 값을 쓴다)
 //  [사용] fr5_suction 루트에 붙인다 (BackArmIK는 자동으로 같이 붙는다). 칸은 봉현님 도구 Tools/Bonguri/Configure Suction Loading이 맞춘다.
 //         LoadNextBox()로 시작하고, Busy가 false가 되면 LastLoadSucceeded로 결과를 본다.
+//         공정에서는 CellController가 레인 끝 상자를 TryLoadBox()로 넘긴다 (지훈님 통합).
+//  [!] 컨테이너 칸 이름을 toto → tote로 바꿨다. 씬에 저장된 값은 그대로 읽고(FormerlySerializedAs), 예전 이름 toto도 코드에서 쓸 수 있다.
 //  [!] kinematic 상자는 흡착하지 않는다. 벨트 위 상자(kinematic)는 물리를 켠 뒤 LoadNextBox()를 부른다.
 //  [!] Tote 칸이 비어 있으면 예전 단순 적재 경로(LoadSeqRoutine(): 윗면 흡착 → Slots 칸)로 돈다. 공정에서는 Tote를 꼭 연결한다.
 //  [!] StopLoading()은 그 자리에서 멈춘다. 들고 있던 상자는 흡착한 채로 남는다.
@@ -39,6 +42,7 @@ public sealed class BoxAttacher : MonoBehaviour
     public BackArmIK armIK;
 
     [Tooltip("넣을 컨테이너 (ToteBase). 공정에서는 꼭 연결한다. 비우면 예전 단순 적재 경로로 돈다")]
+    [FormerlySerializedAs("toto")]
     public ToteBase tote;
 
     [Tooltip("흡착컵 끝 기준점 (Tool Center Point). 상자 면에 닿는 점")]
@@ -115,6 +119,13 @@ public sealed class BoxAttacher : MonoBehaviour
     /// 적재 중인지, 마지막 적재가 끝까지 성공했는지 (칸 등록 + 팔 복귀)
     public bool Busy => routine != null;
     public bool LastLoadSucceeded { get; private set; }
+
+    /// 준비가 끝났는지 (Start() 끝에서 true, 꺼지면 false). CellController가 상자를 넘기기 전에 본다
+    public bool IsReady { get; private set; }
+
+    /// 예전 이름 toto로 tote를 읽고 쓴다 (CellController · BonguriIntegrationSetup 등 예전 이름을 쓰는 코드용)
+    /// [!] 저장되는 칸은 tote 하나다. 씬에 저장된 예전 값(toto)은 FormerlySerializedAs로 tote가 읽는다.
+    public ToteBase toto { get => tote; set => tote = value; }
 
     /// 넣은 상자 수 (지워진 상자는 빼고 센다), 넣은 상자 목록
     public int LoadedCount => placed.Count(b => b != null);
@@ -212,12 +223,14 @@ public sealed class BoxAttacher : MonoBehaviour
         armIK.Hold();
         cycleReadyAngles = armIK.Model.CurrentAngles();
         cycleToolRotation = Quaternion.Inverse(transform.rotation) * tcp.rotation;
+        IsReady = true;
         Status = "흡착 적재 준비 완료 · 다음 박스 적재";
     }
 
     // 꺼질 때 관절 중력을 되돌리고, 적재를 멈추고, 상자를 놓고, 끈 충돌을 모두 되돌린다.
     void OnDisable()
     {
+        IsReady = false;
         foreach (var entry in gravityStates)
         {
             if (entry.body != null) { entry.body.useGravity = entry.gravity; }
@@ -350,8 +363,47 @@ public sealed class BoxAttacher : MonoBehaviour
     //  ============================================================
     //  적재 명령
     //  ============================================================
+    // 공정 인계: 넘겨받은 상자 하나만 집기 시작한다 (주변 상자를 찾지 않는다). 시작하면 true.
+    /// [호출] CellController (레인 끝에 닿은 상자를 넘길 때)
+    /// 준비 · 동작 중 · 상자 · 수거함 연결 · 다음 칸을 차례로 확인하고, 문제가 있으면 error에 이유를 넣고 false.
+    /// [!] 시작하지 못하면 상자를 다시 kinematic으로 둔다 (컨베이어 정지 상태 유지).
+    public bool TryLoadBox(BoxCollider box, out string error)
+    {
+        error = null;
+        if (!Application.isPlaying || !isActiveAndEnabled || !IsReady)
+            { error = "적재 로봇 초기화 대기"; }
+        else if (Busy || Attached || armIK == null || armIK.Moving)
+            { error = "적재 로봇 동작 중"; }
+        else if (box == null || box.attachedRigidbody == null)
+            { error = "적재 상자의 Collider/Rigidbody가 없습니다."; }
+        else if (placed.Contains(box))
+            { error = "이미 적재한 상자입니다."; }
+        else if (tote == null || tote.loader != this || container != tote.transform)
+            { error = "수거함 양방향 연결을 확인하세요."; }
+        else if (slots == null || slots.Length != tote.Capacity || slots.Any(s => s == null) || !slots.SequenceEqual(tote.slots))
+            { error = "수거함 슬롯 연결을 확인하세요."; }
+        else if (!tote.TryNext(box, out _, out _, out string reason))
+            { error = reason; }
+        if (error != null) { return false; }
+
+        //  넘겨받은 상자의 물리를 켜고 적재를 시작한다
+        targetBox = box;
+        var body = box.attachedRigidbody;
+        body.isKinematic = false;
+        body.useGravity = true;
+        body.linearVelocity = Vector3.zero;
+        body.angularVelocity = Vector3.zero;
+        LoadNextBox();
+        if (Busy) { return true; }
+
+        //  접수되지 않은 상자는 컨베이어 정지 상태로 유지한다
+        body.isKinematic = true;
+        error = Status;
+        return false;
+    }
+
     // 다음 상자 하나를 넣기 시작한다. 시작하면 Busy가 true가 되고, 끝나면 false가 된다.
-    /// [호출] LoadSequence, ToteBase.StackNextBox()
+    /// [호출] TryLoadBox(), LoadSequence, ToteBase.StackNextBox()
     /// targetBox가 비어 있거나 이미 넣은 상자면, 집기 위치 0.3 m 안에서 가장 가까운 물리 상자(자식 "CardboardBody" 있음)를 고른다.
     /// [!] Play 중이 아니거나, 적재 중이거나, 팔이 움직이는 중이면 아무것도 하지 않는다. 칸 · 상자 문제면 Status만 바꾸고 시작하지 않는다.
     public void LoadNextBox()

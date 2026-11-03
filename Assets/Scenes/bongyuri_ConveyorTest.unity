@@ -29617,7 +29617,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   serializedBakingSet: {fileID: 11400000, guid: e5fd15492c217ea4490c2af2408ada6b, type: 2}
-  sceneGUID: b77a90ce29700f249a4a3c4a1fc2dbdd
+  sceneGUID: b4bc620c4c370cb45bd0c78f0ef713da
   obsoleteAsset: {fileID: 0}
   obsoleteCellSharedDataAsset: {fileID: 0}
   obsoleteCellSupportDataAsset: {fileID: 0}
@@ -33944,6 +33944,32 @@ MonoBehaviour:
   driveStiffness: 100000
   driveDamping: 10000
   driveForceLimit: 1000
+  targetBox: {fileID: 0}
+  degreesPerSecond: 20
+  metresPerSecond: 0.06
+  positionTolerance: 0.008
+  angleTolerance: 4
+  boxClearance: 0.008
+  compensateRobotGravity: 1
+  <Moving>k__BackingField: 0
+  <Arrived>k__BackingField: 0
+  <GoalPosition>k__BackingField: {x: 0, y: 0, z: 0}
+  <GoalRotation>k__BackingField: {x: 0, y: 0, z: 0, w: 0}
+  <Status>k__BackingField: 
+  ProtectBox: 0
+  PathFailure: 
+  PrecisePlacement: 0
+  solution: []
+  started: 0
+  plannedError: 0
+  plannedAngle: 0
+  routeIndex: 0
+  plannedBoxPosition: {x: 0, y: 0, z: 0}
+  plannedBoxRotation: {x: 0, y: 0, z: 0, w: 0}
+  bodies: []
+  preparedTransferStart: []
+  preparedLiftStart: []
+  preparedTurnStart: []
 --- !u!1001 &1431939294
 PrefabInstance:
   m_ObjectHideFlags: 0

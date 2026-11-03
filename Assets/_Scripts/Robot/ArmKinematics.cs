@@ -6,19 +6,19 @@ using UnityEngine;
 //  ============================================================
 //  ArmKinematics
 //  FR5 로봇암 관절 6개의 계산 모델. 관절각으로 손끝(tcp) 위치를 구하고(순운동학), 목표 위치 · 회전에 맞는 관절각을 찾는다(역운동학).
-//      - 컴포넌트가 아니다. ArmIK가 로봇 루트와 tcp로 만들어 쓴다: new ArmKinematics(transform, tcp)
+//      - 컴포넌트가 아니다. FrontArmIK · BackArmIK가 로봇 루트와 tcp로 만들어 쓴다: new ArmKinematics(transform, tcp)
 //      - 만들 때 읽어 둔 링크 배치로 계산만 한다. 실제 관절은 움직이지 않는다 (ApplyEditorPose()만 예외).
-//      - 같은 모델로 자세 조건(팔꿈치 · 손목 높이)과 팔 · 상자 겹침도 검사한다. ArmIK가 경로를 고를 때 쓴다.
+//      - 같은 모델로 자세 조건(팔꿈치 · 손목 높이)과 팔 · 상자 겹침도 검사한다. FrontArmIK · BackArmIK가 경로를 고를 때 쓴다.
 //      - 만들 때의 관절각(reference)과 그때의 링크 회전을 같이 기억하고, 계산할 때는 (관절각 − reference)만큼 돌린다.
 //
-//  [사용] 시퀀스 스크립트는 ArmIK만 부른다. 에디터 도구(SetRobotReadyPose 등)는 ArmIK.Model 또는 new ArmKinematics()로 직접 쓴다.
+//  [사용] 시퀀스 스크립트는 FrontArmIK · BackArmIK만 부른다. 에디터 도구(SetRobotReadyPose 등)와 BoxAttacher는 BackArmIK.Model 또는 new ArmKinematics()로 직접 쓴다.
 //  [!] 각도는 도(°), 길이는 m. Solve() 안의 자코비안 계산만 라디안을 쓴다.
 //  [!] 자세 조건 · 겹침 검사 함수는 안에서 Forward()를 먼저 부른다 (Forward()가 채운 링크 행렬을 쓴다).
 //
 //  [설계서와의 차이]
 //      * Solve()에 선택 인자가 3개 있다: allowedAngle(허용 각도 오차, default: 3°), acceptable(관절각 조건), allowedPosition(허용 위치 오차, default: 0.005 m).
 //      * 설계서에 없는 공개 함수: HasRaisedElbow() · WristAbovePlane() · IsDistalAbove() · IsElbowRaised()(자세 조건), ApplyEditorPose()(에디터 전용).
-//      * 설계서는 "다른 스크립트는 ArmIK만 부른다"이다. 에디터 도구는 이 클래스를 직접 쓴다.
+//      * 설계서는 "다른 스크립트는 ArmIK만 부른다"이다. 지금은 FrontArmIK · BackArmIK다 (11/03 팀 원칙). 에디터 도구 · BoxAttacher는 이 클래스를 직접 쓴다.
 //  ============================================================
 public sealed class ArmKinematics
 {
@@ -63,18 +63,16 @@ public sealed class ArmKinematics
     //  만들기
     //  ============================================================
     // 로봇 루트에서 tcp까지 링크를 따라가며 관절 · 링크 배치 · Collider를 읽는다.
-    /// [호출] ArmIK (Initialize(), 경로 계획마다 새로 만든다), 에디터 도구
+    /// [호출] FrontArmIK · BackArmIK (Initialize(), 경로 계획마다 새로 만든다), BoxAttacher, 에디터 도구
     /// [!] tcp가 root 아래에 없거나 회전 관절이 6개가 아니면 예외를 던진다.
     public ArmKinematics(Transform root, Transform tcp)
     {
         //  1) tcp가 로봇 아래에 있는지 확인
-        if (tcp == null || !tcp.IsChildOf(root))
-        { throw new Exception("로봇 아래의 tcp를 지정하세요."); }
+        if (tcp == null || !tcp.IsChildOf(root)) { throw new Exception("로봇 아래의 tcp를 지정하세요."); }
 
         //  2) 루트 → tcp 링크 목록 (tcp에서 부모로 올라간 뒤 뒤집는다)
         var chain = new List<Transform>();
-        for (var link = tcp; link != root; link = link.parent)
-        { chain.Add(link); }
+        for (var link = tcp; link != root; link = link.parent) { chain.Add(link); }
         chain.Add(root);
         chain.Reverse();
         parent = root.parent;
@@ -82,8 +80,7 @@ public sealed class ArmKinematics
         //  3) 회전 관절 6개 (루트 관절 제외)
         Joints = chain.Select(link => link.GetComponent<ArticulationBody>())
             .Where(body => body != null && !body.isRoot && body.jointType == ArticulationJointType.RevoluteJoint).ToArray();
-        if (Joints.Length != 6)
-        { throw new Exception("6개의 회전 관절이 필요합니다. 발견: " + Joints.Length); }
+        if (Joints.Length != 6) { throw new Exception("6개의 회전 관절이 필요합니다. 발견: " + Joints.Length); }
 
         //  4) 기준 관절각, 관절 제한 (자유 회전 관절은 ±360)
         reference = CurrentAngles();
@@ -122,23 +119,15 @@ public sealed class ArmKinematics
 
             //  Collider를 감싼 상자 (Collider 로컬). Mesh는 메시 범위 상자. 다른 모양은 건너뛴다
             Bounds bounds;
-            if (collider is BoxCollider box)
-            { bounds = new Bounds(box.center, box.size); }
-            else if (collider is MeshCollider mesh && mesh.sharedMesh != null)
-            { bounds = mesh.sharedMesh.bounds; }
-            else
-            { continue; }
+            if (collider is BoxCollider box) { bounds = new Bounds(box.center, box.size); }
+            else if (collider is MeshCollider mesh && mesh.sharedMesh != null) { bounds = mesh.sharedMesh.bounds; }
+            else { continue; }
 
             //  Collider가 붙은 가장 가까운 링크 (tcp 쪽부터 찾는다)
             int index = -1;
             for (int i = chain.Count - 1; i >= 0; i--)
-            {
-                if (collider.transform == chain[i] || collider.transform.IsChildOf(chain[i]))
-                {
-                    index = i;
-                    break;
-                }
-            }
+                if (collider.transform == chain[i] || collider.transform.IsChildOf(chain[i])) 
+                    { index = i; break; }
             if (index >= 0)
             {
                 geometry.Add(new Part
@@ -180,11 +169,10 @@ public sealed class ArmKinematics
 
     // (에디터 전용) 관절각 6개대로 링크를 돌려 놓고, 관절 구동 목표도 그 각도로 맞춘다.
     /// [호출] 에디터 도구 (SetRobotReadyPose, ArrangeParcelIKStation, SuctionLoadingSetup)
-    /// [!] Play 중에 부르면 예외를 던진다. Play 중에는 ArmIK가 구동 목표로 움직인다.
+    /// [!] Play 중에 부르면 예외를 던진다. Play 중에는 FrontArmIK · BackArmIK가 구동 목표로 움직인다.
     public void ApplyEditorPose(float[] angles)
     {
-        if (Application.isPlaying)
-            { throw new InvalidOperationException("Editor pose only"); }
+        if (Application.isPlaying) { throw new InvalidOperationException("Editor pose only"); }
 
         for (int j = 0; j < Joints.Length; j++)
         {
@@ -235,7 +223,7 @@ public sealed class ArmKinematics
     //  자세 조건 (Solve()의 acceptable로 넘겨 자세를 거른다)
     //  ============================================================
     // 팔꿈치(forearm 관절)가 minimumHeight 이상에 있는지 (월드 y, m).
-    /// [호출] ArmIK 경로 계획 (raisedElbowClearance > 0일 때), 에디터 도구
+    /// [호출] FrontArmIK · BackArmIK 경로 계획 (raisedElbowClearance > 0일 때), 에디터 도구
     public bool HasRaisedElbow(float[] angles, float minimumHeight)
     {
         Forward(angles, out _, out _);
@@ -244,7 +232,7 @@ public sealed class ArmKinematics
     }
 
     // 손목(wrist1)부터 끝까지 링크 Collider의 아랫면이 모두 height 이상인지 (월드 y, m).
-    /// [호출] ArmIK 경로 계획 (minimumWristPlane), 에디터 도구
+    /// [호출] FrontArmIK · BackArmIK 경로 계획 (minimumWristPlane), 에디터 도구
     /// 아랫면 = 감싼 상자 중심 높이 − 월드로 돌린 상자의 반높이.
     public bool WristAbovePlane(float[] angles, float height)
     {
@@ -296,7 +284,7 @@ public sealed class ArmKinematics
     //  팔 · 상자 겹침
     //  ============================================================
     // 이 관절각에서 팔 링크가 상자(사방으로 margin만큼 키운 크기)와 겹치지 않으면 true. 상자가 없으면 false.
-    /// [호출] ArmIK 경로 계획 · FixedUpdate() (상자 보호), 에디터 도구
+    /// [호출] FrontArmIK · BackArmIK 경로 계획 · FixedUpdate() (상자 보호), 에디터 도구
     /// 2단계로 본다: ① 감싼 상자끼리 분리축 검사(Overlap())로 거르고, ② 겹칠 수 있는 링크만 Physics.ComputePenetration()으로 실제 모양을 본다.
     /// ②는 상자 자리에 둔 숨은 BoxCollider(clearanceProbe)로 한다. 상자 자체 Collider는 바꾸지 않는다.
     public bool IsBoxClear(float[] angles, BoxCollider box, float margin)
@@ -345,7 +333,7 @@ public sealed class ArmKinematics
             if (Overlap(center, axes, extents, boxCenter, boxAxes, boxExtents) &&
                 Physics.ComputePenetration(clearanceProbe, box.transform.position, box.transform.rotation,
                     part.collider, matrix.MultiplyPoint3x4(Vector3.zero), matrix.rotation, out _, out _))
-                { return false; }
+            { return false; }
         }
         return true;
     }
@@ -365,7 +353,7 @@ public sealed class ArmKinematics
             //  이 축 위의 두 상자 그림자 반길이 합보다 중심 거리가 멀면 갈라진다
             float radius = 0;
             for (int j = 0; j < 3; j++)
-                { radius += extentsA[j] * Mathf.Abs(Vector3.Dot(axesA[j], axis)) + extentsB[j] * Mathf.Abs(Vector3.Dot(axesB[j], axis)); }
+            { radius += extentsA[j] * Mathf.Abs(Vector3.Dot(axesA[j], axis)) + extentsB[j] * Mathf.Abs(Vector3.Dot(axesB[j], axis)); }
             if (Mathf.Abs(Vector3.Dot(difference, axis)) > radius + 0.000001f) { return false; }
         }
         return true;
@@ -376,12 +364,12 @@ public sealed class ArmKinematics
     //  역운동학 (목표 → 관절각)
     //  ============================================================
     // 목표 위치 · 회전에 맞는 관절각(best)을 찾는다. 허용 오차 안이고 acceptable 조건도 맞으면 true.
-    /// [호출] ArmIK 경로 계획 (MoveTo(), MoveThrough(), MoveToJointPath() 등), 에디터 도구
+    /// [호출] FrontArmIK · BackArmIK 경로 계획 (MoveTo(), MoveThrough(), MoveToJointPath() 등), 에디터 도구
     /// seed(보통 지금 관절각)에서 시작해 반복으로 오차를 줄인다 (감쇠 최소제곱. 자코비안은 관절을 0.25°씩 움직여 잰다).
     /// 시작점은 9개: seed, 그다음 seed를 흔든 자세 (1 ~ 3번째 ±35°, 4 ~ 8번째 ±95°). 시작점마다 최대 260번 반복한다.
     /// best = 모든 시작점 중 오차가 가장 작고 acceptable을 만족한 관절각. 실패해도 best와 오차는 채운다.
     /// allowedPosition은 0.0005 ~ 0.02 m로 자른다.
-    public bool Solve(Vector3 target, Quaternion targetRotation, 
+    public bool Solve(Vector3 target, Quaternion targetRotation,
                       float[] seed, out float[] best, out float positionError, out float angleError,
                       float allowedAngle = 3f, Func<float[], bool> acceptable = null, float allowedPosition = 0.005f)
     {
@@ -415,7 +403,7 @@ public sealed class ArmKinematics
                 }
 
                 //  3) 충분히 가까우면 이 시작점은 끝
-                if (positionDelta.magnitude < convergencePosition && rotationDelta.magnitude < Mathf.Min(2f, allowedAngle * 0.65f) * Mathf.Deg2Rad) 
+                if (positionDelta.magnitude < convergencePosition && rotationDelta.magnitude < Mathf.Min(2f, allowedAngle * 0.65f) * Mathf.Deg2Rad)
                     { break; }
 
                 //  4) 자코비안: 관절 하나씩 epsilon만큼 움직였을 때 손끝 위치 · 회전이 변하는 양 (라디안당)
@@ -441,7 +429,8 @@ public sealed class ArmKinematics
                 for (int row = 0; row < 6; row++)
                 {
                     for (int col = 0; col < 6; col++)
-                        for (int k = 0; k < 6; k++) { normal[row, col] += jacobian[k, row] * jacobian[k, col]; }
+                        for (int k = 0; k < 6; k++) 
+                            { normal[row, col] += jacobian[k, row] * jacobian[k, col]; }
                     normal[row, row] += 0.000025f;
                     for (int k = 0; k < 6; k++)
                         { normal[row, 6] += jacobian[k, row] * error[k]; }
@@ -467,7 +456,7 @@ public sealed class ArmKinematics
 
             //  9) best가 허용 오차 안이면 다른 시작점은 해 보지 않는다
             Forward(best, out var bestPosition, out var bestRotation);
-            if (Vector3.Distance(bestPosition, target) < requiredPosition && Quaternion.Angle(bestRotation, targetRotation) < allowedAngle) 
+            if (Vector3.Distance(bestPosition, target) < requiredPosition && Quaternion.Angle(bestRotation, targetRotation) < allowedAngle)
                 { break; }
         }
 
@@ -498,7 +487,8 @@ public sealed class ArmKinematics
             //  k열에서 절댓값이 가장 큰 행을 피벗으로 고른다
             int pivot = k;
             for (int i = k + 1; i < 6; i++)
-                if (Mathf.Abs(matrix[i, k]) > Mathf.Abs(matrix[pivot, k])) { pivot = i; }
+                if (Mathf.Abs(matrix[i, k]) > Mathf.Abs(matrix[pivot, k])) 
+                    { pivot = i; }
             if (Mathf.Abs(matrix[pivot, k]) < 1e-10f) { return false; }
 
             //  피벗 행과 k행을 바꾸고, k행을 피벗 값으로 나눈다
@@ -518,8 +508,7 @@ public sealed class ArmKinematics
                 if (i != k)
                 {
                     float factor = matrix[i, k];
-                    for (int j = k; j < 7; j++)
-                        { matrix[i, j] -= factor * matrix[k, j]; }
+                    for (int j = k; j < 7; j++) { matrix[i, j] -= factor * matrix[k, j]; }
                 }
             }
         }

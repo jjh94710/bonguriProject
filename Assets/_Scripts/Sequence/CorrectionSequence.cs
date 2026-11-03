@@ -6,7 +6,7 @@ using UnityEngine;
 //  CorrectionSequence
 //  교정 스테이션의 로봇암(FR5)이 상자 옆면을 손가락 그리퍼로 집어 들고, 손목으로 90° 돌린 뒤 같은 벨트 위에 내려놓는다.
 //      - 위로 올릴 면(faceToRaise)이 옆면이면 90° 1번, 바닥면이면 90° 2번(중간에 내려놓고 다시 집기)으로 올린다.
-//      - 이동은 ArmIK, 집기는 GripperController(손가락 마찰)가 한다. 이 스크립트는 순서와 성공 · 실패 판단을 맡는다.
+//      - 이동은 FrontArmIK, 집기는 GripperController(손가락 마찰)가 한다. 이 스크립트는 순서와 성공 · 실패 판단을 맡는다.
 //      - 공정에서는 CellController가 CorrectAt(상자, 면)을 부르고, 끝나면 LastSuccess를 본다.
 //
 //  [순서]
@@ -22,7 +22,7 @@ using UnityEngine;
 //      → 10. 물러나기
 //      → (11. 준비 자세 → (바닥면이면) 1.부터 한 번 더)
 //  
-//  [사용] 로봇 루트(fr5_with_gripper)에 GripperController와 함께 붙인다. ArmIK는 자동으로 같이 붙는다.
+//  [사용] 로봇 루트(fr5_with_gripper)에 GripperController와 함께 붙인다. FrontArmIK는 자동으로 같이 붙는다.
 //         Tcp(손가락 사이 기준점), Gripper, Placement Surface(교정 구간 벨트 Collider)를 연결하고,
 //         Tools/Bonguri/Set Raised Ready Pose로 준비 자세 관절각을 채운다.
 //  [!] 벨트 위 상자는 kinematic이다. CorrectAt()이 집기 전에 물리를 켜고, 내려놓은 뒤 상자가 멈출 때까지 기다린다.
@@ -30,8 +30,9 @@ using UnityEngine;
 //  [!] 교정 로봇은 ConveyorLine.TakeAway()를 부르지 않는다. 상자는 같은 정지 위치로 돌아온다.
 //
 //  [설계서와의 차이]
-//      * 도착 확인에 ArmIK.Arrived를 쓴다 (ArmIK에 추가). Moving이 false가 되어도 정지 · 경로 중단 · 시간 초과일 수 있어서.
-//      * 옆면 접근과 90° 돌리기 경로는 ArmIK.MoveThrough()(여러 점을 곧게 잇는 경로, ArmIK에 추가)로 만든다.
+//      * 이동은 FrontArmIK를 쓴다 (설계서: ArmIK). 봉현님이 교정 로봇용 FrontArmIK · 흡착 로봇용 BackArmIK로 나눈 것을 따른다 (11/03 팀 원칙).
+//      * 도착 확인에 FrontArmIK.Arrived를 쓴다 (FrontArmIK에 추가). Moving이 false가 되어도 정지 · 경로 중단 · 시간 초과일 수 있어서.
+//      * 옆면 접근과 90° 돌리기 경로는 FrontArmIK.MoveThrough()(여러 점을 곧게 잇는 경로, FrontArmIK에 추가)로 만든다.
 //        높이 · 손목 방향 · 거리를 바꿔 가며 처음 계획되는 경로를 쓴다 (설계서에 경로 정하는 법은 없음).
 //      * 바닥면은 로봇 쪽 옆면을 먼저 세운다. 그러면 바닥면이 로봇 쪽을 보게 되어 두 번 모두 로봇 쪽에서 집는다.
 //      * 손가락 닫힘량은 집는 방향의 상자 폭에 맞춰 자동으로 정한다 (parcelGripCloseAmount는 폭 6 cm 기준).
@@ -44,7 +45,7 @@ using UnityEngine;
 //  ============================================================
 [DefaultExecutionOrder(-1000)]
 [DisallowMultipleComponent]
-[RequireComponent(typeof(ArmIK))]
+[RequireComponent(typeof(FrontArmIK))]
 public class CorrectionSequence : MonoBehaviour
 {
     //  ---------------- 올릴 면 ----------------    (FR-05)
@@ -54,7 +55,7 @@ public class CorrectionSequence : MonoBehaviour
 
     //  ---------------- 연결 ----------------
     [Header("연결")]
-    [Tooltip("손가락 사이 기준점 (로봇 아래 Tool Center Point). ArmIK.tcp로 넘긴다")]
+    [Tooltip("손가락 사이 기준점 (로봇 아래 Tool Center Point). FrontArmIK.tcp로 넘긴다")]
     public Transform tcp;
 
     [Tooltip("집을 상자의 BoxCollider. 공정에서는 CorrectAt()이 상자마다 바꾼다. Inspector 버튼 · 에디터 도구는 이 칸을 쓴다")]
@@ -66,8 +67,8 @@ public class CorrectionSequence : MonoBehaviour
     [Tooltip("내려놓을 벨트 면 (교정 구간 벨트의 Collider). 비우면 이름에 Conveyor가 들어간 오브젝트를 찾는다")]
     public Collider placementSurface;
 
-    [Tooltip("같은 오브젝트의 ArmIK (FrontArmIK · BackArmIK도 된다). 비우면 찾는다")]
-    [SerializeField] ArmIK ik;
+    [Tooltip("같은 오브젝트의 FrontArmIK. 비우면 찾는다")]
+    [SerializeField] FrontArmIK ik;
 
     //  ---------------- 이동 ----------------
     [Header("이동")]
@@ -135,7 +136,7 @@ public class CorrectionSequence : MonoBehaviour
     //  ============================================================
     //  상태 (CellController · 에디터 도구 · 테스트 패널이 읽는 값)
     //  ============================================================
-    /// 상태 문구 (ArmIK 문구 포함), 지금 단계 이름
+    /// 상태 문구 (FrontArmIK 문구 포함), 지금 단계 이름
     public string Status => status;
     public string CycleStep { get; private set; } = "대기";
 
@@ -151,16 +152,16 @@ public class CorrectionSequence : MonoBehaviour
     public bool LastSuccess { get; private set; }
     public string FailReason { get; private set; }
 
-    /// 이동 목표와 오차 (ArmIK 값. 에디터 도구가 읽는다)
+    /// 이동 목표와 오차 (FrontArmIK 값. 에디터 도구가 읽는다)
     public Vector3 GoalPosition => Arm != null ? Arm.GoalPosition : Vector3.zero;
     public Quaternion GoalRotation => Arm != null ? Arm.GoalRotation : Quaternion.identity;
     public float PositionError => Arm != null ? Arm.PositionError : 0f;
 
-    ArmIK Arm
+    FrontArmIK Arm
     {
         get
         {
-            if (ik == null) { ik = GetComponent<ArmIK>(); }
+            if (ik == null) { ik = GetComponent<FrontArmIK>(); }
             return ik;
         }
     }
@@ -180,8 +181,8 @@ public class CorrectionSequence : MonoBehaviour
     //  ============================================================
     //  시작 · 끝
     //  ============================================================
-    // ArmIK에 값을 넘기고 준비 자세로 시작한다.
-    /// ArmIK보다 먼저 준비되도록 Awake()에서 한다 (두 스크립트 모두 실행 순서 -1000).
+    // FrontArmIK에 값을 넘기고 준비 자세로 시작한다.
+    /// FrontArmIK보다 먼저 준비되도록 Awake()에서 한다 (두 스크립트 모두 실행 순서 -1000).
     void Awake()
     {
         ConfigureArm();
@@ -194,7 +195,7 @@ public class CorrectionSequence : MonoBehaviour
     }
 
     // 첫 물리 스텝 뒤 빠진 칸을 확인한다. 빠진 칸이 있으면 경고만 남긴다.
-    /// 관절은 ArmIK.Initialize()가 준비 자세를 목표로 붙잡는다. 여기서 Hold()로 지금 관절각을 다시 잡으면 준비 자세로 가다가 멈춘다.
+    /// 관절은 FrontArmIK.Initialize()가 준비 자세를 목표로 붙잡는다. 여기서 Hold()로 지금 관절각을 다시 잡으면 준비 자세로 가다가 멈춘다.
     IEnumerator Start()
     {
         yield return new WaitForFixedUpdate();
@@ -537,7 +538,7 @@ public class CorrectionSequence : MonoBehaviour
     // 1번 버튼. 상자 옆 대기 위치로 간다 (세울 면 쪽, 30° 아래를 보는 자세). 끝났는지는 Moving으로 본다.
     /// 손목 방향 2가지 × 거리 0.15 · 0.10 · 0.07 m × 올라가는 높이 4가지 중 처음 계획되는 경로를 쓴다. 고른 손목 방향 · 거리는 DescendToBox()가 이어 쓴다.
     /// 경로: ① 지금 자리에서 올라가기 → ② 손목 돌리기 → ③ 대기 위치 위로 옮기기 → ④ 내려가기 (모든 중간 자세가 상자와 boxClearance 이상 떨어져야 한다).
-    /// 모두 안 되면 관절을 한 번에 돌리는 경로를 쓴다 (ArmIK.MoveToJointPath).
+    /// 모두 안 되면 관절을 한 번에 돌리는 경로를 쓴다 (FrontArmIK.MoveToJointPath).
     /// [!] 순서 밖(버튼)에서 부르면 faceToRaise로 세울 면을 정한다.
     public void ApproachBox()
     {
@@ -925,7 +926,7 @@ public class CorrectionSequence : MonoBehaviour
 
     static Vector3 Horizontal(Vector3 vector) => new Vector3(vector.x, 0f, vector.z);
 
-    // 움직일 수 있는 상태인지 확인하고 ArmIK에 지금 값을 넘긴다. 다른 이동이 있으면 멈춘다.
+    // 움직일 수 있는 상태인지 확인하고 FrontArmIK에 지금 값을 넘긴다. 다른 이동이 있으면 멈춘다.
     bool CanMove(bool needBox)
     {
         if (!Application.isPlaying)
@@ -935,7 +936,7 @@ public class CorrectionSequence : MonoBehaviour
         }
         if (tcp == null || Arm == null)
         {
-            SetStatus("Tcp 칸이 비어 있거나 ArmIK가 없습니다.");
+            SetStatus("Tcp 칸이 비어 있거나 FrontArmIK가 없습니다.");
             return false;
         }
         if (needBox && targetBox == null)
@@ -949,7 +950,7 @@ public class CorrectionSequence : MonoBehaviour
         return true;
     }
 
-    // Inspector 값을 ArmIK에 넘긴다 (tcp, 피할 상자, 속도, 허용 오차, 상자 간격).
+    // Inspector 값을 FrontArmIK에 넘긴다 (tcp, 피할 상자, 속도, 허용 오차, 상자 간격).
     void ConfigureArm()
     {
         if (Arm == null) { return; }
