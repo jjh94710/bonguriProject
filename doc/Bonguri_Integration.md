@@ -83,3 +83,14 @@ TerminalA/B/C의 ConveyorLine에 Use Surface Path를 켜고 실제 벨트 Collid
 Verify Classified Box Conveyor Routes는 실제 CellController의 판정·판독·분기를 거친 도착을 확인한다. 도착 검증 중에는 Play 세션의 적재 감시 배열만 비우고 표면 경로 속도를 1m/s로 바꿔 상자를 끝에 보존한다. 저장된 씬과 정상 운전의 적재 연결은 유지한다.
 
 통합 경로 재검증에서도 실제 투입 상자 3개가 판정·판독·분기를 거쳐 A/B/C 최종 정지점에 도착했다(passed=true). 최종 상자 중심에서 로봇 베이스까지 거리는 각각 약 0.44/0.43/0.46m다. 롤러 모서리의 수평 접촉 법선은 최대 30mm 범위에서 위로 보정하고, 해소되지 않으면 이송을 정지한다. results/conveyor_route_check/latest.json 및 events.log에 기록했다. 흡착·수거함 적재는 이 도착 검사에서 실행하지 않았다.
+### B 진입 직후 역행 수정
+
+B는 첫 직선 벨트의 중간으로 진입하는데 최초 경로 생성기가 벨트 상류 끝을 먼저 경유하도록 만들었다. 따라서 TerminalB 인계 직후 상자가 잠깐 상류로 이동한 뒤 방향을 바꿨다. 같은 시각 두 번째 상자의 C 푸셔가 작동해 푸셔 간섭처럼 보였다. 기존 좌표 기록에서 BOX-0001이 19.661~20.165초 사이 X=-2.5313에서 -2.1884로 역행한 것을 확인했다.
+
+B의 첫 직선은 현재 Entry에서 하류 끝으로 직접 이어지도록 생성기를 수정했고, 씬의 TerminalB SurfaceRoute도 다시 구성했다. A/C 경로와 푸셔 동작은 변경하지 않았다. Verify Classified Box Conveyor Routes에는 B 진입 이후 매 갱신의 실제 Rigidbody 위치를 진행 방향으로 투영해 1mm를 넘는 역행을 실패로 처리하는 검사를 추가했다. 결과 JSON에 bDirectionSamples와 maximumBReverseStep을 기록한다.
+
+수정 후 같은 고정 시드의 실제 상자 3개로 재검증했다. A/B/C 모두 최종 정지점에 도착했고, C/A 푸셔 작동을 포함한 B 위치 2,540회 비교에서 최대 역행량은 0m였다(passed=true).
+
+### 실제 흡착 집기 확인
+
+Verify Actual Suction Pickup 에디터 검사로 실제 CellController 투입·분류·이송·집기 요청을 실행했다. 테스트 중만 표면 이송 속도를 1m/s로 설정했다. 세 로봇 모두 해당 상자를 전달받았으나 흡착 접촉 자세를 찾지 못해 Attached/Lifted/Placed가 모두 false, Processed=0이었다. A는 X 방향 경로에서 IK 위치/각도 오차 202.1mm/12.7도, B는 Z 방향 124.3mm/64.6도, C는 Z 방향 117.3mm/63.4도를 보고했다. B/C는 두 번의 시도 모두 실패했고, A는 첫 시도 실패를 확인한 시점에 검사를 종료했다. 이 수치는 접촉 자세 풀이의 오차이며 로봇 베이스와 상자 간 거리가 아니다. 위치만 가깝다고 실제 흡착 자세가 가능한 것은 아니므로 집기 정지점·흡착면·IK 접근 자세를 함께 조정해야 한다. 원본은 results/pickup_check/latest.json 및 events.log에 보존했다. 공정/로봇 실행 코드는 이번 확인에서 변경하지 않았다.

@@ -24,10 +24,12 @@ public static class BonguriIntegrationSetup
             if (command == "connect-totes") ConnectTerminalTotes();
             if (command == "connect-loading") ConnectTerminalLoading();
             if (command == "run-loading-check") BonguriTerminalLoadingCheck.Run();
+            if (command == "run-pickup-check") BonguriPickupCheck.Run();
             if (command == "run-route-check") BonguriTerminalLoadingCheck.RunRouteCheck();
             if (command == "audit-belt-paths") BonguriConveyorSurfaceSetup.Audit();
             if (command == "connect-belt-paths") BonguriConveyorSurfaceSetup.Connect();
             if (command == "run-surface-check") BonguriConveyorSurfaceCheck.Run();
+            if (command == "repair-b-entry") BonguriConveyorSurfaceSetup.RepairBEntry();
             if (command == "run-top" || command == "run-side" || command == "run-random")
             {
                 SessionState.SetString("BonguriIntegration.Run", command);
