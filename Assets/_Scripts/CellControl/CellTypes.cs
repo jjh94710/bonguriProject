@@ -72,11 +72,12 @@ public enum Destination
     NG      //  예외 레인 (NG 토트)
 }
 
-/// 교정 스테이션의 제어 방식 (FR-12). 판독은 제어 방식과 관계없이 항상 LabelReaderAgent가 한다.
+/// 교정 스테이션의 제어 방식 (FR-12). 송장 면 판정만 다르고, 회전은 두 방식 모두 규칙으로 정한다.
+/// 판독은 제어 방식과 관계없이 항상 LabelReader(송장 OCR ONNX)가 한다.
 public enum ControlMode
 {
-    Basic,  //  기본 제어: 카메라 비율이 가장 큰 면을 보고 규칙으로 회전을 정한다
-    Policy  //  학습 정책: CorrectionAgent(ML ①)가 회전을 고른다
+    Basic,  //  기본 제어: 카메라 5대의 송장 색 비율로 판정한다 (FaceCameraRig)
+    Policy  //  학습 정책: 송장 유무 ONNX(지도학습)로 판정한다 (LabelPresenceDetector)
 }
 
 /// 설비 상태 (FR-10). 대시보드에 색과 글자로 함께 표시한다.

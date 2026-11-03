@@ -230,7 +230,7 @@ public class BoxInfo : MonoBehaviour
     static Transform FindChild(Transform root, string childName)
     {
         foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
-            if (t.name == childName) return t;
+            if (t.name == childName) { return t; }
         return null;
     }
 
