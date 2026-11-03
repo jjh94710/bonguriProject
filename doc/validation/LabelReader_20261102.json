@@ -1,0 +1,15 @@
+{
+    "total": 50,
+    "fullCorrect": 50,
+    "prefixCorrect": 50,
+    "regionCorrect": 50,
+    "unknown": 0,
+    "ruleTests": 9,
+    "rulePassed": 9,
+    "readTests": 15,
+    "readPassed": 15,
+    "maxReadMilliseconds": 47.6101,
+    "blankRejected": true,
+    "passed": true,
+    "error": ""
+}
