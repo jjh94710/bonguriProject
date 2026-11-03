@@ -33,6 +33,7 @@ public sealed class BoxAttacher : MonoBehaviour
     [Min(.001f)] public float contactTolerance = .008f;
     public string Status = "Play 후 다음 박스 적재를 누르세요.";
     public bool Busy => routine != null;
+    public bool IsReady { get; private set; }
     public bool LastLoadSucceeded { get; private set; }
     bool placementReached;
     public int LoadedCount => placed.Count(b => b != null);
@@ -78,6 +79,7 @@ public sealed class BoxAttacher : MonoBehaviour
         armIK.Model = new ArmKinematics(transform, tcp); armIK.Hold();
         cycleReadyAngles = armIK.Model.CurrentAngles();
         cycleToolRotation = Quaternion.Inverse(transform.rotation) * tcp.rotation;
+        IsReady = true;
         Status = "흡착 적재 준비 완료 · 다음 박스 적재";
     }
     void Configure() { armIK.minimumWristPlane=toto != null ? suctionFloor : -10000f; armIK.raisedElbowClearance=toto != null ? .10f : 0; armIK.driveDamping=1500f; armIK.driveForceLimit=10000f; armIK.Configure(tcp, null, 20, .07f, .003f, 3, .006f, true); armIK.PrecisePlacement = true; }
@@ -128,6 +130,31 @@ public sealed class BoxAttacher : MonoBehaviour
     }
     void RestoreContacts()
     { foreach (var pair in ignored) if(pair.robot != null && pair.parcel != null) Physics.IgnoreCollision(pair.robot,pair.parcel,false); ignored.Clear(); }
+    // 공정 인계: 주변 상자를 검색하지 않고 전달받은 상자만 집는다.
+    public bool TryLoadBox(BoxCollider box, out string error)
+    {
+        error = null;
+        if (!Application.isPlaying || !isActiveAndEnabled || !IsReady) error = "적재 로봇 초기화 대기";
+        else if (Busy || Attached || armIK == null || armIK.Moving) error = "적재 로봇 동작 중";
+        else if (box == null || box.attachedRigidbody == null) error = "적재 상자의 Collider/Rigidbody가 없습니다.";
+        else if (placed.Contains(box)) error = "이미 적재한 상자입니다.";
+        else if (toto == null || toto.loader != this || container != toto.transform) error = "수거함 양방향 연결을 확인하세요.";
+        else if (slots == null || slots.Length != toto.Capacity || slots.Any(s => s == null) || !slots.SequenceEqual(toto.slots)) error = "수거함 슬롯 연결을 확인하세요.";
+        else if (!toto.TryNext(box, out _, out _, out string reason)) error = reason;
+        if (error != null) return false;
+        targetBox = box;
+        var body = box.attachedRigidbody;
+        body.isKinematic = false;
+        body.useGravity = true;
+        body.linearVelocity = Vector3.zero;
+        body.angularVelocity = Vector3.zero;
+        LoadNextBox();
+        if (Busy) return true;
+        // 접수되지 않은 상자는 컨베이어 정지 상태로 유지한다.
+        body.isKinematic = true;
+        error = Status;
+        return false;
+    }
     public void LoadNextBox()
     {
         if (!Application.isPlaying || Busy || armIK == null || armIK.Moving) return;
@@ -445,5 +472,5 @@ public sealed class BoxAttacher : MonoBehaviour
         Status = "놓기 중단 · 칸 정렬/입구 위 높이 확인 실패 · " + armIK.Status;
     }
 
-    void OnDisable(){foreach(var entry in gravityStates)if(entry.body!=null)entry.body.useGravity=entry.gravity;gravityStates.Clear();StopAllCoroutines();routine=null;Detach();RestoreContacts();foreach(var pair in selfPairs)if(pair.a!=null&&pair.b!=null)Physics.IgnoreCollision(pair.a,pair.b,false);selfPairs.Clear();}
+    void OnDisable(){IsReady=false;foreach(var entry in gravityStates)if(entry.body!=null)entry.body.useGravity=entry.gravity;gravityStates.Clear();StopAllCoroutines();routine=null;Detach();RestoreContacts();foreach(var pair in selfPairs)if(pair.a!=null&&pair.b!=null)Physics.IgnoreCollision(pair.a,pair.b,false);selfPairs.Clear();}
 }

@@ -72,6 +72,22 @@ public class CellController : MonoBehaviour
     [Tooltip("(선택) 교정 로봇암 (CorrectionSequence). 비우면 상자를 그 자리에서 바로 돌린다 (자리 표시)")]
     [SerializeField] CorrectionSequence correction;
 
+    [System.Serializable]
+    public sealed class TerminalStation
+    {
+        public Destination destination;
+        public ConveyorLine line;
+        public BoxAttacher loader;
+        [Tooltip("로봇 루트에서 집을 상자 중심까지 허용 거리(m). 벨트 경로 미연결 상태의 먼 상자는 집지 않는다.")]
+        [Min(.1f)] public float maxPickupDistance = 1f;
+    }
+    [Header("터미널 적재 (A / B / C)")]
+    [Tooltip("실제 공정은 A/B/C 세 구간을 연결한다. 비워 두면 기존 분류 전용 시험처럼 적재를 실행하지 않는다.")]
+    [SerializeField] TerminalStation[] terminalStations = new TerminalStation[0];
+    [Min(1f)][SerializeField] float loadingTimeLimit = 180f;
+    readonly HashSet<BoxInfo> blockedLoads = new HashSet<BoxInfo>();
+    readonly HashSet<BoxInfo> waitingTransfers = new HashSet<BoxInfo>();
+
                         ///// : TODO : 
     //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
     //      loaders (BoxAttacher[3])                 터미널 끝 흡착 로봇, 봉현님 (Check()와 알람 정지용)
@@ -237,6 +253,7 @@ public class CellController : MonoBehaviour
             State = CellState.Stopped;
             if (feeder != null) { feeder.StopFeeding(); }       // 운전 전 테스트에서도 불릴 수 있어 빈 칸을 확인한다
             if (correction != null) { correction.Stop(); }      // 교정 로봇은 그 자리에서 관절각을 유지한다 (손가락은 그대로)
+            StopTerminalLoaders();
 
                                 ///// : TODO : 
             //  [다음 단계] 벨트 · 끝 로봇 3대 정지
@@ -264,9 +281,14 @@ public class CellController : MonoBehaviour
     /// [호출] 상자가 터미널 컨테이너나 NG 토트에 들어갈 때 ToteBase.Add()가 부른다 (터미널은 끝 로봇이 내려놓은 뒤).
     /// [!] 같은 상자를 두 번 넘겨도 한 번만 센다 (이미 최종 상태면 무시).
     public void Finish(BoxInfo box)
+    { Finish(box, box != null ? box.destination : Destination.None); }
+
+    public void Finish(BoxInfo box, Destination actualDestination)
     {
         if (box == null || box.IsFinished) { return; }
+        if (actualDestination == Destination.None) { return; }
 
+        box.actualDestination = actualDestination;
         box.finishTime = Time.time;
         Processed++;
         Corrections += box.rotationCount;
@@ -285,11 +307,11 @@ public class CellController : MonoBehaviour
         {
             //  2) 적재: 터미널 컨테이너에 들어간 상자. 정답 터미널과 같으면 분류 성공
             box.state = BoxState.Loaded;
-            int terminal = (int)box.destination - 1;    //  A 0, B 1, C 2
+            int terminal = (int)actualDestination - 1;    //  A 0, B 1, C 2
             if (terminal >= 0 && terminal < TerminalCounts.Length) { TerminalCounts[terminal]++; }
 
             Destination answer = ExpectedDestination(box);
-            if (box.destination == answer)
+            if (actualDestination == answer)
             {
                 Success++;
                 consecutiveErrors = 0;
@@ -302,7 +324,7 @@ public class CellController : MonoBehaviour
             }
         }
 
-        Debug.Log($"[Cell] {box.boxId} {result} | 목적지 {box.destination} | 회전 {box.rotationCount}회", this);
+        Debug.Log($"[Cell] {box.boxId} {result} | 목적지 {box.destination} | 실제 도착 {actualDestination} | 회전 {box.rotationCount}회", this);
                             ///// : TODO : 
         //  [다음 단계] log.Write(box);
     }
@@ -349,6 +371,9 @@ public class CellController : MonoBehaviour
 
         Coroutine correctLoop = StartCoroutine(CorrectStationLoop());
         Coroutine readLoop = StartCoroutine(ReadStationLoop());
+        var loadingLoops = new List<Coroutine>();
+        foreach (var station in terminalStations)
+            loadingLoops.Add(StartCoroutine(TerminalStationLoop(station)));
 
         while (!alarmActive)
         {
@@ -364,6 +389,8 @@ public class CellController : MonoBehaviour
         feeder.StopFeeding();
         StopCoroutine(correctLoop);
         StopCoroutine(readLoop);
+        foreach (var loop in loadingLoops) StopCoroutine(loop);
+        StopTerminalLoaders();
         State = CellState.Stopped;
         IsRunning = false;
         Debug.Log($"[Cell] 운전 끝 | {Summary()}", this);
@@ -374,6 +401,173 @@ public class CellController : MonoBehaviour
     int InProcessCount()
     {
         return feeder != null ? feeder.InProcess : 0;
+    }
+
+    public bool ValidateTerminalConfiguration(out string error)
+    {
+        error = null;
+        if (terminalStations == null) { error = "Terminal Stations 배열이 없습니다."; return false; }
+        var destinations = new HashSet<Destination>();
+        var lanes = new HashSet<ConveyorLine>();
+        var loaders = new HashSet<BoxAttacher>();
+        foreach (var station in terminalStations)
+        {
+            if (station == null || (int)station.destination < (int)Destination.A || (int)station.destination > (int)Destination.C ||
+                !destinations.Add(station.destination) || station.line == null ||
+                station.loader == null || !loaders.Add(station.loader))
+            { error = "터미널 목적지/정지 구간/적재 로봇이 비었거나 중복입니다."; return false; }
+            var end = TerminalEnd(station.line);
+            if (end == null || end.StopPoint == null || !lanes.Add(end))
+            { error = "터미널 이송 경로가 순환하거나 최종 정지 구간이 비었거나 중복입니다."; return false; }
+            var loader = station.loader;
+            var tote = loader.toto;
+            if (!loader.isActiveAndEnabled || loader.tcp == null || loader.suctionCup == null || loader.armIK == null ||
+                tote == null || !tote.isActiveAndEnabled || tote.loader != loader || loader.container != tote.transform ||
+                loader.slots == null || tote.slots == null || loader.slots.Length != tote.Capacity || tote.slots.Length != tote.Capacity)
+            { error = station.destination + " 적재 로봇/수거함 연결을 확인하세요."; return false; }
+            var slots = new HashSet<Transform>();
+            for (int i = 0; i < tote.Capacity; i++)
+                if (loader.slots[i] == null || loader.slots[i] != tote.slots[i] || !slots.Add(loader.slots[i]) || !loader.slots[i].IsChildOf(tote.transform))
+                { error = station.destination + " 수거함 슬롯이 누락되었거나 일치하지 않습니다."; return false; }
+        }
+        return true;
+    }
+
+    IEnumerator TerminalStationLoop(TerminalStation station)
+    {
+        while (IsRunning && !alarmActive)
+        {
+            AdvanceTerminalTransfers(station.line);
+            // 분기 구간이 아니라 NextLine 연결을 모두 지난 최종 정지점에서만 인계한다.
+            var loadingLine = TerminalEnd(station.line);
+            if (loadingLine == null) { yield return null; continue; }
+            var box = loadingLine.CurrentBox;
+            if (box == null || blockedLoads.Contains(box) || box.IsFinished || !station.loader.IsReady || station.loader.Busy || station.loader.Attached)
+            { yield return null; continue; }
+            if (Vector3.Distance(station.loader.transform.position, loadingLine.StopPoint.position) > station.maxPickupDistance)
+            {
+                // 임시 분기 정지점은 적재 지점이 아니다. 이송 경로가 이어질 때까지 적재/실패 처리를 하지 않는다.
+                box.state = BoxState.Transferring;
+                if (waitingTransfers.Add(box))
+                    Debug.Log($"[Cell Transfer] {station.destination} | {box.boxId} 이송 대기 | 최종 적재 지점 미연결: {loadingLine.name}. 로봇 앞 정지점까지 NextLine 경로를 연결하세요.", this);
+                yield return null;
+                continue;
+            }
+            waitingTransfers.Remove(box);
+            yield return LoadTerminalBox(station, loadingLine, box);
+        }
+    }
+
+    void AdvanceTerminalTransfers(ConveyorLine start)
+    {
+        var visited = new HashSet<ConveyorLine>();
+        for (var line = start; line != null && line.NextLine != null && visited.Add(line); line = line.NextLine)
+        {
+            if (!line.HasBoxAtStop || !line.NextLine.CanAccept) continue;
+            line.CurrentBox.state = BoxState.Transferring;
+            line.Release();
+        }
+    }
+
+    static ConveyorLine TerminalEnd(ConveyorLine start)
+    {
+        var visited = new HashSet<ConveyorLine>();
+        var line = start;
+        while (line != null)
+        {
+            if (!visited.Add(line)) return null;
+            if (line.NextLine == null) return line;
+            line = line.NextLine;
+        }
+        return null;
+    }
+
+    IEnumerator LoadTerminalBox(TerminalStation station, ConveyorLine loadingLine, BoxInfo box)
+    {
+        var loader = station.loader;
+        var collider = box.GetComponent<BoxCollider>();
+        string error = null;
+        if (box.IsMarked || box.destination == Destination.NG) error = "NG 상자가 일반 터미널에 도착했습니다.";
+        else if (collider == null || collider.attachedRigidbody == null) error = "상자의 Collider/Rigidbody가 없습니다.";
+        else if (Vector3.Distance(loader.transform.position, collider.bounds.center) > station.maxPickupDistance)
+            error = $"정지점이 로봇 집기 범위 밖입니다 ({Vector3.Distance(loader.transform.position, collider.bounds.center):F2}m). 터미널 이송 경로를 연결하세요.";
+        else if (loader.toto.Count >= loader.toto.Capacity)
+        {
+            // 수거함이 비워지면 자동으로 다시 확인한다. 만적을 적재 실패로 반복 집계하지 않는다.
+            blockedLoads.Add(box);
+            RaiseAlarm("수거함 가득 참 " + station.destination, box.boxId);
+            while (IsRunning && !alarmActive && loader.toto.Count >= loader.toto.Capacity) yield return null;
+            blockedLoads.Remove(box);
+            yield break;
+        }
+        if (error != null) { BlockTerminal(station, box, error); yield break; }
+        var body = collider.attachedRigidbody;
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            if (alarmActive || !IsRunning || box == null) yield break;
+            box.state = BoxState.Loading;
+            if (!loader.TryLoadBox(collider, out error)) break;
+            Debug.Log($"[Cell Loading] {station.destination} | {box.boxId} 적재 시작 | 시도 {attempt + 1}", this);
+            float started = Time.time;
+            while (loader.Busy && !alarmActive && IsRunning && Time.time - started < loadingTimeLimit) yield return null;
+            bool timedOut = loader.Busy && Time.time - started >= loadingTimeLimit;
+            if (loader.Busy) loader.StopLoading();
+            // 배치는 성공했지만 팔 복귀가 실패한 경우도 실물 적재는 한 번만 집계한다.
+            bool placed = false;
+            foreach (var item in loader.PlacedBoxes) if (item == collider) { placed = true; break; }
+            if (placed)
+            {
+                loadingLine.TakeAway(box);
+                Finish(box, station.destination);
+                if (!loader.LastLoadSucceeded) RaiseAlarm("적재 후 팔 복귀 실패 " + station.destination, box.boxId);
+                yield break;
+            }
+            if (alarmActive || !IsRunning) yield break;
+            error = timedOut ? "적재 제한 시간 초과" : loader.Status;
+            // 흡착 중이거나 이미 이동한 상자를 자동으로 되돌리거나 다시 집지 않는다.
+            if (loader.Attached || Vector3.Distance(collider.bounds.center, loadingLine.StopPoint.position + Vector3.up * collider.bounds.extents.y) > .05f) break;
+            if (attempt == 0) { Debug.LogWarning($"[Cell Loading] {box.boxId} 적재 재시도 | {error}", this); yield return new WaitForSeconds(.5f); }
+        }
+        if (!loader.Attached && body != null) body.isKinematic = true;
+        BlockTerminal(station, box, error ?? "적재 실패");
+    }
+
+    void BlockTerminal(TerminalStation station, BoxInfo box, string error)
+    {
+        box.state = BoxState.Sorting;
+        blockedLoads.Add(box);
+        Debug.LogWarning($"[Cell Loading] {station.destination} | {box.boxId} 정지 유지 | {error}", this);
+        RaiseAlarm("적재 실패 " + station.destination, box.boxId);
+    }
+
+    public void RetryTerminalLoading(Destination terminal)
+    {
+        foreach (var station in terminalStations)
+        {
+            var end = TerminalEnd(station.line);
+            if (station.destination == terminal && end != null && end.CurrentBox != null && !station.loader.Busy && !station.loader.Attached)
+                blockedLoads.Remove(end.CurrentBox);
+        }
+    }
+
+    void StopTerminalLoaders()
+    {
+        if (terminalStations == null) return;
+        foreach (var station in terminalStations)
+            if (station != null && station.loader != null && station.loader.Busy)
+            {
+                var end = TerminalEnd(station.line);
+                if (end != null && end.CurrentBox != null) blockedLoads.Add(end.CurrentBox);
+                station.loader.StopLoading();
+            }
+    }
+
+    void OnDisable()
+    {
+        IsRunning = false;
+        StopAllCoroutines();
+        if (feeder != null) feeder.StopFeeding();
+        StopTerminalLoaders();
     }
 
     // 교정 스테이션: 도착 대기 → JudgeAndCorrect() → 판독 구간으로 이송    (FR-03, FR-05, FR-06, FR-16)
@@ -638,6 +832,8 @@ public class CellController : MonoBehaviour
             Debug.LogWarning($"[Cell] {missing} 칸이 비어 있어 운전을 시작하지 않습니다.", this);
             return false;
         }
+        if (!ValidateTerminalConfiguration(out string terminalError))
+        { Debug.LogWarning("[Cell] " + terminalError, this); return false; }
 
         //  카메라 리그: 카메라 5대가 없으면 시작하지 않는다. 모든 레이어를 보면 경고만 한다
         if (!faceRig.IsBuilt)

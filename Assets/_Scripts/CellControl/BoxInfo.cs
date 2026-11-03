@@ -124,6 +124,9 @@ public class BoxInfo : MonoBehaviour
     [Tooltip("터미널 컨테이너나 NG 토트에 들어간 시각")]
     public float finishTime;
 
+    [Tooltip("실제 적재 또는 수거된 터미널. 판독으로 정한 destination과 구분한다.")]
+    public Destination actualDestination;
+
 
     //  ============================================================
     //  계산 속성

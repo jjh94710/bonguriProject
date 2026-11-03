@@ -18,7 +18,7 @@ using UnityEngine;
 //             흐름 방향은 입구 → 출구로 계산하므로 벨트가 어느 축을 향해도 된다.
 //  [대기열]   벨트 위 상자는 들어온 순서대로 줄을 서고, 앞 상자와 gap만큼 띄워 멈춘다.
 //  [!] 상자를 세우는 것은 스크립트이다. 스토퍼는 보이는 동작일 뿐 충돌로 막지 않는다.
-//  [!] 벨트는 수평이라고 본다 (상자 높이는 입구에서 정한 그대로 간다).
+//  [!] 표면 경로를 사용하면 벨트 Collider와 경유점을 따라 높이/자세를 보정한다. 경로가 없으면 기존 수평 직선 모드다.
 //  [분기]     분류 구간은 푸셔(pushers)를 지나가는 순서대로 갖는다. 상자가 분기 지점에 오면 한 번 세워 TryPush()를 묻는다.
 //             판이 나와 있거나, 담당 푸셔가 받을 벨트가 차 있다고 하면 그 자리에서 기다린다.
 //
@@ -41,6 +41,22 @@ public class ConveyorLine : MonoBehaviour
 
     [Tooltip("출구. 입구 → 출구 방향이 흐름 방향이다")]
     [SerializeField] Transform exit;                                // exit --> (다음 경유점) nextLine.entry
+
+    [Header("벨트 표면 경로 (선택)")]
+    [SerializeField] bool useSurfacePath;
+    [Tooltip("Entry와 Exit 사이의 벨트 윗면 중앙 경유점. 코너와 경사 시작/끝에도 배치한다.")]
+    [SerializeField] Transform[] surfaceWaypoints = new Transform[0];
+    [Tooltip("상자가 실제로 올라가는 벨트의 Collider만 연결한다. 바닥/로봇/상자는 제외한다.")]
+    [SerializeField] Collider[] beltSurfaces = new Collider[0];
+    [Min(.0001f)][SerializeField] float surfaceClearance = .002f;
+    [Min(.02f)][SerializeField] float surfaceProbeHeight = .15f;
+    [Range(1,60)][SerializeField] float maximumSlope = 35f;
+    ConveyorSurfacePath surfacePath;
+    string surfacePathError;
+    sealed class ParcelPathState { public float distance, lateral; public Quaternion levelRotation; }
+    readonly Dictionary<BoxInfo, ParcelPathState> pathStates = new Dictionary<BoxInfo, ParcelPathState>();
+    public bool UsesSurfacePath => useSurfacePath;
+    public float PathLength => BeltLength;
 
     [Tooltip("이송 속도 m/s (default: 0.3)")]
     [SerializeField] float speed = 0.3f;
@@ -125,6 +141,8 @@ public class ConveyorLine : MonoBehaviour
     //  ============================================================
     /// 정지 위치에 멈춰 있는 상자 (없으면 null)
     public BoxInfo CurrentBox { get; private set; }
+    public Transform StopPoint => stopPoint;
+    public ConveyorLine NextLine => nextLine;
 
     /// 정지 위치에 상자가 있는지
     public bool HasBoxAtStop => CurrentBox != null;
@@ -142,12 +160,13 @@ public class ConveyorLine : MonoBehaviour
         get
         {
             if (entry == null || exit == null) { return false; }
+            if (useSurfacePath && !ValidateSurfacePath(out _)) return false;
             if (boxes.Count == 0) { return true; }
 
             BoxInfo last = boxes[boxes.Count - 1];
             if (last == null) { return true; }
 
-            return AlongBelt(PositionOf(last)) - HalfSize(last, Flow) * 2f >= gap;
+            return DistanceOf(last) - HalfSize(last, FlowAt(DistanceOf(last))) * 2f >= gap;
         }
     }
 
@@ -177,7 +196,41 @@ public class ConveyorLine : MonoBehaviour
     }
 
     /// 입구에서 출구까지 흐름 방향 거리 m
-    float BeltLength => AlongBelt(exit.position);
+    float BeltLength => useSurfacePath ? (surfacePath != null ? surfacePath.Length : 0) : AlongBelt(exit.position);
+
+    public bool ValidateSurfacePath(out string error)
+    {
+        if (!useSurfacePath) { error = null; return true; }
+        if (surfacePath != null) { error = surfacePathError; return error == null; }
+        if (entry == null || exit == null || beltSurfaces == null)
+        { error = "Entry/Exit/벨트 표면을 연결하세요."; return false; }
+        var points = new List<Vector3> { entry.position };
+        foreach (var point in surfaceWaypoints)
+        {
+            if (point == null) { error = "표면 경유점이 비어 있습니다."; return false; }
+            points.Add(point.position);
+        }
+        points.Add(exit.position);
+        surfacePath = new ConveyorSurfacePath(points.ToArray(), beltSurfaces, surfaceClearance, surfaceProbeHeight, maximumSlope);
+        surfacePath.Validate(out surfacePathError);
+        error = surfacePathError;
+        return error == null;
+    }
+    public bool TryGetSurfacePose(BoxInfo box, Quaternion levelRotation, float distance, out Vector3 position, out Quaternion rotation, out string error)
+    {
+        position = default; rotation = levelRotation;
+        if (!useSurfacePath) { error = "표면 경로 모드가 아닙니다."; return false; }
+        if (!ValidateSurfacePath(out error)) return false;
+        return surfacePath.TryPose(box, levelRotation, distance, 0, out position, out rotation, out error);
+    }
+    void OnValidate() { surfacePath = null; surfacePathError = null; }
+    float DistanceOf(BoxInfo box) => useSurfacePath && pathStates.TryGetValue(box, out var state) ? state.distance : AlongBelt(PositionOf(box));
+    Vector3 FlowAt(float distance)
+    {
+        if (!useSurfacePath || surfacePath == null) return Flow;
+        surfacePath.Sample(distance, out _, out var tangent);
+        return tangent;
+    }
 
 
     //  ============================================================
@@ -188,6 +241,7 @@ public class ConveyorLine : MonoBehaviour
     {
         if (entry == null || exit == null)
         { Debug.LogWarning($"[Conveyor] {lineName}: Entry / Exit가 비어 있습니다.", this); }
+        if (useSurfacePath && !ValidateSurfacePath(out string pathError)) Debug.LogError($"[Conveyor] {lineName}: {pathError}", this);
 
         if (stopper != null) { stopperUpPosition = stopper.position; }
 
@@ -216,12 +270,20 @@ public class ConveyorLine : MonoBehaviour
     /// 상자의 방향은 그대로 두고, 위치만 입구로 옮긴다 (상자 바닥이 벨트 윗면에 닿게).
     public bool Feed(BoxInfo box)
     {
-        if (box == null || !CanAccept) { return false; }
+        if (box == null || boxes.Contains(box) || !CanAccept) { return false; }
 
         //  1) 입구에 놓기: 벨트 가운데 + 폭 방향 무작위, 높이는 벨트 윗면 + 상자 높이의 절반
         Vector3 across = Vector3.Cross(Vector3.up, Flow);       //  흐름 방향의 오른쪽 (벨트 폭 방향)
         float lateral = Random.Range(-lateralRange, lateralRange) + Random.Range(-stopErrorZ, stopErrorZ);
         Vector3 position = entry.position + across * lateral + Vector3.up * HalfSize(box, Vector3.up);
+        Quaternion rotation = box.transform.rotation;
+        if (useSurfacePath)
+        {
+            if (!surfacePath.TryPose(box, rotation, 0, lateral, out position, out var poseRotation, out string error))
+            { Debug.LogWarning($"[Conveyor] {lineName}: 투입 거부 | {error}", this); return false; }
+            pathStates[box] = new ParcelPathState { distance = 0, lateral = lateral, levelRotation = rotation };
+            rotation = poseRotation;
+        }
 
         //  2) 물리를 끄고 스크립트로 옮긴다
         Rigidbody body = box.GetComponent<Rigidbody>();
@@ -230,8 +292,10 @@ public class ConveyorLine : MonoBehaviour
             body.isKinematic = true;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;    //  움직이는 동안 충돌을 놓치지 않게
             body.position = position;
+            if (useSurfacePath) body.rotation = rotation;
         }
         box.transform.position = position;
+        if (useSurfacePath) box.transform.rotation = rotation;
 
         //  3) 줄 맨 뒤에 세우고 이송 시작
         boxes.Add(box);
@@ -262,8 +326,15 @@ public class ConveyorLine : MonoBehaviour
         //  정지 위치에서 releaseTolerance(5cm) 보다 멀거나 기울었으면 교정 실패로 표시한다 (그래도 보내서 NG로 간다)
         /// 이미 예외 표시된 상자는 건너뛴다. 교정 로봇 실패를 CellController가 알렸는데 여기서 또 알리지 않게.
         Vector3 error = PositionOf(box) - stopPoint.position;
-        error.y = 0f;
-        if (!box.IsMarked && (error.magnitude > releaseTolerance || !IsFlat(box)))
+        Vector3 normal = Vector3.up;
+        if (useSurfacePath && pathStates.TryGetValue(box, out var state))
+        {
+            surfacePath.Sample(state.distance, out var surface, out _);
+            surfacePath.TrySurface(surface, out _, out normal);
+            error = Vector3.ProjectOnPlane(error, normal);
+        }
+        else error.y = 0f;
+        if (!box.IsMarked && (error.magnitude > releaseTolerance || !IsFlat(box, normal)))
         {
             box.Mark(ExceptionReason.CorrectionFail);
             if (cell != null) { cell.RaiseAlarm("교정 실패", box.boxId); }
@@ -282,6 +353,7 @@ public class ConveyorLine : MonoBehaviour
         if (box == null) { return; }
 
         boxes.Remove(box);
+        pathStates.Remove(box);
         if (CurrentBox == box) { CurrentBox = null; }
         if (releasedBox == box)
         {
@@ -324,15 +396,19 @@ public class ConveyorLine : MonoBehaviour
             if (CheckOffBelt(box)) { yield break; }
 
             //  4) 이번 스텝에 갈 수 있는 곳 = 출구, 정지 위치, 다음 분기 지점, 앞 상자 뒤 중 가장 가까운 곳
-            float distance = AlongBelt(PositionOf(box));
+            float distance = DistanceOf(box);
+            Vector3 flow = FlowAt(distance);
             float limit = BeltLength;
             if (!passedStop) { limit = Mathf.Min(limit, stopAt); }
+            // 로봇이 상자를 들어도 정지점 인계가 끝날 때까지 다음 상자가 점유하지 않는다.
+            if (!passedStop && CurrentBox != null && CurrentBox != box)
+                limit = Mathf.Min(limit, stopAt - HalfSize(CurrentBox, flow) - HalfSize(box, flow) - gap);
 
             int index = boxes.IndexOf(box);
             if (index > 0 && boxes[index - 1] != null)
             {
                 BoxInfo ahead = boxes[index - 1];
-                limit = Mathf.Min(limit, AlongBelt(PositionOf(ahead)) - HalfSize(ahead, Flow) - HalfSize(box, Flow) - gap);
+                limit = Mathf.Min(limit, DistanceOf(ahead) - HalfSize(ahead, flow) - HalfSize(box, flow) - gap);
             }
 
             BoxPusher pusher = NextPusher(ref pusherIndex);
@@ -343,7 +419,17 @@ public class ConveyorLine : MonoBehaviour
             float next = Mathf.Min(distance + speed * Time.fixedDeltaTime, limit);
             if (next > distance)
             {
-                MoveBox(box, Flow * (next - distance));
+                if (useSurfacePath)
+                {
+                    var state = pathStates[box];
+                    if (!surfacePath.TryPose(box, state.levelRotation, next, state.lateral, out var position, out var rotation, out string error))
+                    { TransferFailure(box, error); yield break; }
+                    var body = box.GetComponent<Rigidbody>();
+                    if (body != null) { body.MovePosition(position); body.MoveRotation(rotation); }
+                    else box.transform.SetPositionAndRotation(position, rotation);
+                    state.distance = next;
+                }
+                else MoveBox(box, flow * (next - distance));
                 ScrollBelt(next - distance);
                 distance = next;
             }
@@ -380,7 +466,7 @@ public class ConveyorLine : MonoBehaviour
             if (box == releasedBox)
             {
                 float stopperAt = stopper != null ? AlongBelt(stopper.position) : stopAt;
-                if (distance - HalfSize(box, Flow) > stopperAt + 0.01f)
+                if (distance - HalfSize(box, flow) > stopperAt + 0.01f)
                 {
                     releasedBox = null;
                     if (stopper != null) { StartCoroutine(MoveStopper(true)); }
@@ -393,15 +479,15 @@ public class ConveyorLine : MonoBehaviour
                 if (nextLine == null)
                 {
                     boxes.Remove(box);
+                    pathStates.Remove(box);
                     Debug.Log($"[Conveyor] {lineName}: {box.boxId} 출구 도착 (다음 구간 없음, 지움)", this);
                     Destroy(box.gameObject);
                     yield break;
                 }
                 if (nextLine.CanAccept)
                 {
-                    boxes.Remove(box);
-                    nextLine.Feed(box);
-                    yield break;
+                    if (nextLine.Feed(box))
+                    { boxes.Remove(box); pathStates.Remove(box); yield break; }
                 }
             }
         }
@@ -414,7 +500,10 @@ public class ConveyorLine : MonoBehaviour
         arriveTime = Time.time;
 
         Vector3 error = PositionOf(box) - stopPoint.position;
-        error.y = 0f;                                   //  높이 차이는 빼고 수평 거리만 잰다
+        if (useSurfacePath && pathStates.TryGetValue(box, out var state) &&
+            surfacePath.TryPose(box, state.levelRotation, AlongBelt(stopPoint.position), state.lateral, out var expected, out _, out _))
+            error = PositionOf(box) - expected;
+        else error.y = 0f;
         LastStopError = error.magnitude;
 
         if (LastStopError > stopTolerance)
@@ -437,6 +526,14 @@ public class ConveyorLine : MonoBehaviour
     /// 벗어난 상자는 목록에서 빼고, 물리를 켜서 떨어지게 둔다.
     bool CheckOffBelt(BoxInfo box)
     {
+        if (useSurfacePath && pathStates.TryGetValue(box, out var state))
+        {
+            if (!surfacePath.TryPose(box, state.levelRotation, state.distance, state.lateral, out var expected, out _, out string error))
+            { TransferFailure(box, error); return true; }
+            if (Vector3.Distance(PositionOf(box), expected) <= Mathf.Max(.05f, beltWidth * .5f)) return false;
+            TransferFailure(box, "표면 경로에서 상자가 벗어났습니다.");
+            return true;
+        }
         Vector3 offset = PositionOf(box) - entry.position;
         float sideways = Mathf.Abs(Vector3.Dot(offset, Vector3.Cross(Vector3.up, Flow)));
         bool fell = offset.y < 0f;
@@ -451,13 +548,20 @@ public class ConveyorLine : MonoBehaviour
         if (cell != null) { cell.RaiseAlarm("이송 실패", box.boxId); }
         return true;
     }
+    void TransferFailure(BoxInfo box, string error)
+    {
+        boxes.Remove(box); pathStates.Remove(box);
+        box.Mark(ExceptionReason.TransferFail);
+        Debug.LogWarning($"[Conveyor] {lineName}: {box.boxId} 이송 정지 | {error}", this);
+        if (cell != null) cell.RaiseAlarm("이송 실패", box.boxId);
+    }
 
 
     //  ============================================================
     //  계산 · 이동 도우미
     //  ============================================================
     // 위치 → 입구에서 흐름 방향으로 잰 거리 m
-    float AlongBelt(Vector3 position) => Vector3.Dot(position - entry.position, Flow);
+    float AlongBelt(Vector3 position) => useSurfacePath && surfacePath != null ? surfacePath.Project(position) : Vector3.Dot(position - entry.position, Flow);
 
     // 상자의 지금 위치. Rigidbody가 있으면 물리 엔진의 위치를 쓴다 (MovePosition과 같은 값).
     /// [호출] 이 구간, BoxPusher
@@ -469,10 +573,10 @@ public class ConveyorLine : MonoBehaviour
 
     //  상자의 한 면이 바닥을 향해 평평하게 놓였는지 (어느 축이든 위쪽과 10° 안)
     /// 상자 축 3개 중 위아래를 가장 많이 향한 축의 |y|가 cos(10°) 이상이면 평평하다.
-    static bool IsFlat(BoxInfo box)
+    static bool IsFlat(BoxInfo box, Vector3 normal)
     {
         Transform boxTransform = box.transform;
-        float best = Mathf.Max(Mathf.Abs(boxTransform.up.y), Mathf.Abs(boxTransform.right.y), Mathf.Abs(boxTransform.forward.y));
+        float best = Mathf.Max(Mathf.Abs(Vector3.Dot(boxTransform.up, normal)), Mathf.Abs(Vector3.Dot(boxTransform.right, normal)), Mathf.Abs(Vector3.Dot(boxTransform.forward, normal)));
         return best >= Mathf.Cos(10f * Mathf.Deg2Rad);
     }
 
@@ -609,7 +713,10 @@ public class ConveyorLine : MonoBehaviour
         if (entry == null || exit == null) { return; }
 
         Gizmos.color = Color.yellow;
-        Gizmos.DrawLine(entry.position, exit.position);
+        Vector3 previous = entry.position;
+        if (useSurfacePath && surfaceWaypoints != null)
+            foreach (var point in surfaceWaypoints) if (point != null) { Gizmos.DrawLine(previous, point.position); previous = point.position; }
+        Gizmos.DrawLine(previous, exit.position);
         Gizmos.DrawWireSphere(entry.position, 0.01f);
         if (stopPoint != null)
         {

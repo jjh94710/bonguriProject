@@ -22,6 +22,12 @@ public static class BonguriIntegrationSetup
             if (command == "audit") Audit();
             if (command == "setup") Setup();
             if (command == "connect-totes") ConnectTerminalTotes();
+            if (command == "connect-loading") ConnectTerminalLoading();
+            if (command == "run-loading-check") BonguriTerminalLoadingCheck.Run();
+            if (command == "run-route-check") BonguriTerminalLoadingCheck.RunRouteCheck();
+            if (command == "audit-belt-paths") BonguriConveyorSurfaceSetup.Audit();
+            if (command == "connect-belt-paths") BonguriConveyorSurfaceSetup.Connect();
+            if (command == "run-surface-check") BonguriConveyorSurfaceCheck.Run();
             if (command == "run-top" || command == "run-side" || command == "run-random")
             {
                 SessionState.SetString("BonguriIntegration.Run", command);
@@ -94,6 +100,43 @@ public static class BonguriIntegrationSetup
         if (!EditorSceneManager.SaveScene(scene)) throw new IOException("Scene save failed.");
         File.WriteAllText("Temp/BonguriTerminalTotes.txt", report.ToString());
         Debug.Log("[Integration] Connected and verified all three terminal totes (8 slots each).");
+    }
+    [MenuItem("Tools/Bonguri/Integration/Connect Terminal Loading To Cell")]
+    public static void ConnectTerminalLoading()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode) throw new InvalidOperationException("Stop Play before connecting terminal loading.");
+        var scene = SceneManager.GetActiveScene();
+        if (scene.path != "Assets/Scenes/bongyuri.unity") throw new InvalidOperationException("Open bongyuri first.");
+        var components = scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<MonoBehaviour>(true)).ToArray();
+        var cell = components.OfType<CellController>().Single();
+        var pairs = new[] { Destination.A, Destination.B, Destination.C }.Select(d => new {
+            destination=d,
+            line=components.OfType<ConveyorLine>().Single(l=>l.name=="Terminal"+d),
+            loader=components.OfType<BoxAttacher>().Single(l=>l.name=="fr5_suction"+d)
+        }).ToArray();
+        foreach(var p in pairs) if(p.line.StopPoint==null || p.loader.toto==null || p.loader.toto.loader!=p.loader)throw new InvalidOperationException(p.destination+" terminal/tote is incomplete.");
+        Directory.CreateDirectory("Temp/BonguriIntegrationBackup");
+        string backup="Temp/BonguriIntegrationBackup/before_loading_handoff_"+DateTime.Now.ToString("yyyyMMdd_HHmmss")+".unity";
+        if(!EditorSceneManager.SaveScene(scene,backup,true))throw new IOException("Scene backup failed.");
+        Undo.RecordObject(cell,"Connect terminal loading to CellController");
+        var edit=new SerializedObject(cell);var array=edit.FindProperty("terminalStations");array.arraySize=3;
+        var report=new StringBuilder("CellController terminal loading connections\n");
+        for(int i=0;i<pairs.Length;i++)
+        {
+            var item=array.GetArrayElementAtIndex(i);var pair=pairs[i];
+            item.FindPropertyRelative("destination").enumValueIndex=(int)pair.destination;
+            item.FindPropertyRelative("line").objectReferenceValue=pair.line;
+            item.FindPropertyRelative("loader").objectReferenceValue=pair.loader;
+            item.FindPropertyRelative("maxPickupDistance").floatValue=1f;
+            float distance=Vector3.Distance(pair.loader.transform.position,pair.line.StopPoint.position);
+            report.AppendLine(pair.destination+": "+pair.line.name+" -> "+pair.loader.name+", stop-to-base="+distance.ToString("F3")+"m");
+        }
+        edit.ApplyModifiedProperties();
+        if(!cell.ValidateTerminalConfiguration(out string error))throw new InvalidOperationException(error);
+        EditorUtility.SetDirty(cell);EditorSceneManager.MarkSceneDirty(scene);
+        if(!EditorSceneManager.SaveScene(scene))throw new IOException("Scene save failed.");
+        File.WriteAllText("Temp/BonguriTerminalLoading.txt",report.ToString());
+        Debug.Log("[Integration] Connected A/B/C terminal loading to CellController. Confirm stop points are within robot reach.");
     }
     [MenuItem("Tools/Bonguri/Integration/Connect Bongyuri Process")]
     public static void Setup()
