@@ -9,7 +9,7 @@ using UnityEngine;
 //      - 상자가 터미널 컨테이너나 NG 토트에 들어가면 Finish()로 최종 상태를 정하고 집계한다.
 //      - 이상 상황은 RaiseAlarm()로 알리고, 같은 경고가 연속되면 알람으로 멈춘다.
 //
-                    ///// : TODO : 현재는 골격만 세워진 단계
+///// : TODO : 현재는 골격만 세워진 단계
 //  [골격 단계] 설정 복사, 설비 상태, 운전 명령, 제어 방식, 알람, 집계까지 들어 있다.
 //             스테이션 동작과 다른 스크립트 연결은 그 스크립트를 만들 때 하나씩 채운다 ([다음 단계] 표시).
 //  
@@ -28,6 +28,7 @@ using UnityEngine;
 //      * 카메라 5대가 없으면 운전을 시작하지 않는다 (Check). 운전 중에 없어지면 JudgeFail로 표시한다.
 //      * 교정 로봇(correction)이 비어 있으면 상자를 그 자리에서 바로 돌린다 (RotateInPlace, 로봇 없는 테스트 씬용).
 //      * 교정 로봇이 실패하면(LastSuccess false) 경고를 올리고 더 돌리지 않는다. CorrectionFail 표시는 CorrectionSequence.CorrectAt()이 한다.
+//      * LabelReader가 비어 있으면 상자를 ReadFail로 보낸다. 테스트 씬은 placeholderRead를 켜서 송장 정답으로 분류를 시험한다.
 //  ============================================================
 public class CellController : MonoBehaviour
 {
@@ -57,12 +58,15 @@ public class CellController : MonoBehaviour
     [SerializeField] FaceCameraRig faceRig;
     [Tooltip("연결하면 송장 유무 ONNX로 판정한다. 비워두면 기존 색상 비율 판정을 사용한다.")]
     [SerializeField] LabelPresenceDetector faceDetector;
+    [Tooltip("송장 판독 (LabelReader). 비어 있으면 상자를 ReadFail로 보낸다")]
     [SerializeField] LabelReader reader;
+    [Tooltip("LabelReader가 없는 테스트 씬에서만 켠다. 켜면 1초 뒤 송장 정답으로 목적지를 정한다 (default: 꺼짐)")]
+    [SerializeField] bool placeholderRead = false;
 
     [Tooltip("(선택) 교정 로봇암 (CorrectionSequence). 비우면 상자를 그 자리에서 바로 돌린다 (자리 표시)")]
     [SerializeField] CorrectionSequence correction;
 
-                        ///// : TODO : 
+    ///// : TODO : 
     //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
     //      loaders (LoadSequence[3])                터미널 끝 흡착 로봇 (Check()와 알람 정지용)
     //      correctionAgent (CorrectionAgent)        ML ① 교정 학습 정책
@@ -100,7 +104,7 @@ public class CellController : MonoBehaviour
     public int[] TerminalCounts { get; private set; } = new int[3];
     public int[] ExceptionsByReason { get; private set; } = new int[System.Enum.GetValues(typeof(ExceptionReason)).Length];
 
-                        ///// : TODO : 
+    ///// : TODO : 
     /// [ConveyorLine 구현 후] StationWaitSeconds(교정 스테이션 대기 시간)는 ConveyorLine 연결 후 추가한다.
     /// 시간당 판별량 = 최근 60초 처리 수 × 60, 예외율 (0 ~ 1)    (FR-10)
     public float ThroughputPerHour => finishTimes.Count * 60f;
@@ -216,7 +220,7 @@ public class CellController : MonoBehaviour
             if (feeder != null) { feeder.StopFeeding(); }       // 운전 전 테스트에서도 불릴 수 있어 빈 칸을 확인한다
             if (correction != null) { correction.Stop(); }      // 교정 로봇은 그 자리에서 관절각을 유지한다 (손가락은 그대로)
 
-                                ///// : TODO : 
+            ///// : TODO : 
             //  [다음 단계] 벨트 · 끝 로봇 3대 정지
 
             Debug.LogError($"[Cell] 알람 정지 | {type} {consecutiveErrors}회 연속", this);
@@ -281,7 +285,7 @@ public class CellController : MonoBehaviour
         }
 
         Debug.Log($"[Cell] {box.boxId} {result} | 목적지 {box.destination} | 회전 {box.rotationCount}회", this);
-                            ///// : TODO : 
+        ///// : TODO : 
         //  [다음 단계] log.Write(box);
     }
 
@@ -559,13 +563,14 @@ public class CellController : MonoBehaviour
             box.state = BoxState.Reading;
             Debug.Log($"[Cell] 판독 스테이션 도착 | {box.boxId} | 교정 -> 판독 {box.readArriveTime - box.correctArriveTime:F1}초", this);
 
-            //  2) 판독 · 검증. LabelReader가 연결되어 있으면 OCR · 규칙 검증을 한다 (reader.Read()가 목적지 또는 예외를 기록).
-            //     연결이 없으면 (테스트 씬) 자리 표시: 1초 기다린 뒤 송장 정답으로 목적지를 정한다 (PlaceholderRead()).
-            bool placeholder = reader == null;
-            if (!placeholder) { yield return reader.Read(box); }
-            else { yield return new WaitForSeconds(1f); }
+            //  2) 판독 · 검증. LabelReader가 OCR · 규칙 검증을 하고 목적지 또는 예외를 기록한다 (reader.Read()).
+            //     연결이 없으면 성공으로 처리하지 않고 ReadFail로 보낸다.
+            //     테스트 씬에서 placeholderRead를 켜면 자리 표시: 1초 기다린 뒤 송장 정답으로 목적지를 정한다 (PlaceholderRead()).
+            if (reader != null) { yield return reader.Read(box); }
+            else if (placeholderRead) { yield return new WaitForSeconds(1f); }
+            else { box.Mark(ExceptionReason.ReadFail); Debug.LogError("[Cell] LabelReader가 연결되지 않았습니다.", this); }
             if (!IsRunning) { yield break; }
-            if (placeholder) { PlaceholderRead(box); }
+            if (reader == null && placeholderRead) { PlaceholderRead(box); }
 
             //  3) 분류 구간으로 보낸다
             box.state = BoxState.Sorting;
@@ -575,7 +580,7 @@ public class CellController : MonoBehaviour
 
     //  [자리 표시] 판독 결과 대신 송장 정답으로 목적지를 정한다. 분류 구간(푸셔)을 시험하기 위한 것.
     /// 이미 예외가 표시된 상자는 그대로 둔다. 송장이 윗면에 없으면 NoLabel, 자리수 오류는 ReadFail, 그 밖의 규칙 위반은 RuleViolation.
-    /// [Label ML 준비 완료 후] 이 함수를 지운다.
+    /// [호출] LabelReader가 비어 있고 placeholderRead가 켜져 있을 때만 (테스트 씬).
     void PlaceholderRead(BoxInfo box)
     {
         if (!box.IsMarked)
@@ -593,7 +598,7 @@ public class CellController : MonoBehaviour
     //  ============================================================
     //  점검 · 요약
     //  ============================================================
-                        ///// : TODO : 
+    ///// : TODO : 
     /// [다음 단계] 연결 칸을 열 때마다 여기에 추가한다.
     // 필수 칸 확인. 빠진 칸이 있으면 이름을 알려 주고 false.
     bool Check()
