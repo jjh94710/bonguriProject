@@ -8656,6 +8656,7 @@ MonoBehaviour:
   feeder: {fileID: 0}
   faceRig: {fileID: 961545176}
   faceDetector: {fileID: 961545191}
+  reader: {fileID: 0}
 --- !u!4 &438597355
 Transform:
   m_ObjectHideFlags: 0
@@ -13526,6 +13527,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArmIK
   tcp: {fileID: 0}
+  raisedElbowClearance: 0
+  minimumWristPlane: -10000
+  driveStiffness: 100000
+  driveDamping: 10000
+  driveForceLimit: 1000
 --- !u!1001 &671482042
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -29753,6 +29759,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArmIK
   tcp: {fileID: 0}
+  raisedElbowClearance: 0
+  minimumWristPlane: -10000
+  driveStiffness: 100000
+  driveDamping: 10000
+  driveForceLimit: 1000
 --- !u!1001 &1431939294
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -36486,6 +36497,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArmIK
   tcp: {fileID: 0}
+  raisedElbowClearance: 0
+  minimumWristPlane: -10000
+  driveStiffness: 100000
+  driveDamping: 10000
+  driveForceLimit: 1000
 --- !u!1 &1750561906
 GameObject:
   m_ObjectHideFlags: 0
@@ -40967,6 +40983,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArmIK
   tcp: {fileID: 0}
+  raisedElbowClearance: 0
+  minimumWristPlane: -10000
+  driveStiffness: 100000
+  driveDamping: 10000
+  driveForceLimit: 1000
 --- !u!1001 &1960903662
 PrefabInstance:
   m_ObjectHideFlags: 0
