@@ -78,7 +78,7 @@ public class LoadSequence : MonoBehaviour
     {
         get
         {
-            int full = attacher.toto.Capacity;
+            int full = attacher.tote.Capacity;
             if (cell != null && cell.Settings != null) { full = Mathf.Min(full, cell.Settings.containerFull); }
             return full;
         }
@@ -114,7 +114,7 @@ public class LoadSequence : MonoBehaviour
         IsHalted = false;
         status = "감시 중";
         loop = StartCoroutine(LoadLoop());
-        Debug.Log($"[Load] {name}: 감시 시작 | {lane.name} → {attacher.toto.name} (가득 참 {Full}개)", this);
+        Debug.Log($"[Load] {name}: 감시 시작 | {lane.name} → {attacher.tote.name} (가득 참 {Full}개)", this);
     }
 
     // 감시를 멈춘다. 지금 옮기는 상자가 있으면 다 넣은 뒤 멈춘다.
@@ -142,17 +142,17 @@ public class LoadSequence : MonoBehaviour
     /// [!] 상자 오브젝트 전체(gameObject)를 지운다. 컴포넌트를 넘기면 그 컴포넌트만 지워진다.
     public void EmptyContainer()
     {
-        if (attacher == null || attacher.toto == null) { return; }
+        if (attacher == null || attacher.tote == null) { return; }
 
         int count = 0;
-        foreach (BoxCollider placed in attacher.toto.Boxes)
+        foreach (BoxCollider placed in attacher.tote.Boxes)
         {
             if (placed == null) { continue; }
             Destroy(placed.gameObject);
             count++;
         }
         EmptiedCount += count;
-        Debug.Log($"[Load] {name}: {attacher.toto.name} 자동 비우기 {count}개 (누적 {EmptiedCount}개)", this);
+        Debug.Log($"[Load] {name}: {attacher.tote.name} 자동 비우기 {count}개 (누적 {EmptiedCount}개)", this);
     }
 
 
@@ -173,7 +173,7 @@ public class LoadSequence : MonoBehaviour
             yield return LoadOne(box);
 
             //  3) 가득 찼으면 비운다. 지운 상자가 빠지도록 한 프레임 기다린다
-            if (attacher.toto.Count >= Full)
+            if (attacher.tote.Count >= Full)
             {
                 EmptyContainer();
                 yield return null;
@@ -226,7 +226,7 @@ public class LoadSequence : MonoBehaviour
         if (box == null) { yield break; }                           //  적재 중에 상자가 지워짐
 
         //  4) 컨테이너에 등록되지 않았으면 실패
-        if (System.Array.IndexOf(attacher.toto.Boxes, boxCollider) < 0)
+        if (System.Array.IndexOf(attacher.tote.Boxes, boxCollider) < 0)
         {
             Fail(box, attacher.Status);
             yield break;
@@ -238,7 +238,7 @@ public class LoadSequence : MonoBehaviour
         if (box.destination != terminal)
             { Warn($"오분류 (목적지 {box.destination} → 터미널 {terminal})", box); }
 
-        Debug.Log($"[Load] {name}: {box.boxId} 적재 → {attacher.toto.name} {attacher.toto.Count}/{Full} | {LastLoadSeconds:F1}초", this);
+        Debug.Log($"[Load] {name}: {box.boxId} 적재 → {attacher.tote.name} {attacher.tote.Count}/{Full} | {LastLoadSeconds:F1}초", this);
         if (cell != null) { cell.Finish(box); }
 
         //  6) 상자는 넣었지만 팔이 위로 빠져나오지 못했으면 이 로봇만 멈춘다 (다음 상자 경로가 틀어진다)
@@ -285,7 +285,7 @@ public class LoadSequence : MonoBehaviour
     bool Check()
     {
         string missing = attacher == null ? "Attacher (같은 오브젝트에 BoxAttacher가 없음)"
-                       : attacher.toto == null ? "BoxAttacher의 Toto (ToteBase)"
+                       : attacher.tote == null ? "BoxAttacher의 Tote (ToteBase)"
                        : lane == null ? "Lane"
                        : null;
         if (missing != null)

@@ -7,8 +7,8 @@ using UnityEngine;
 [CustomEditor(typeof(BoxAttacher))] public class BoxAttacherEditor:Editor {
  public override void OnInspectorGUI(){DrawDefaultInspector();var a=(BoxAttacher)target;EditorGUILayout.LabelField("적재",a.LoadedCount+" / "+(a.slots == null ? 0 : a.slots.Length));EditorGUILayout.HelpBox(a.Status,MessageType.Info);
  using(new EditorGUI.DisabledScope(!Application.isPlaying||a.Busy||a.Attached))if(GUILayout.Button("다음 박스 흡착 → 수거함 적재"))a.LoadNextBox();
- if(a.toto!=null){using(new EditorGUI.DisabledScope(!Application.isPlaying||a.Busy||a.Attached||a.toto.AutoStacking||a.toto.Count>=8))if(GUILayout.Button("8개 연속 적재 시험"))a.toto.StartAutoStack();
- using(new EditorGUI.DisabledScope(!Application.isPlaying||!a.toto.AutoStacking))if(GUILayout.Button("연속 적재 중단 (흡착 유지)"))a.toto.StopAutoStack();EditorGUILayout.HelpBox(a.toto.Status,MessageType.None);}
+ if(a.tote!=null){using(new EditorGUI.DisabledScope(!Application.isPlaying||a.Busy||a.Attached||a.tote.AutoStacking||a.tote.Count>=8))if(GUILayout.Button("8개 연속 적재 시험"))a.tote.StartAutoStack();
+ using(new EditorGUI.DisabledScope(!Application.isPlaying||!a.tote.AutoStacking))if(GUILayout.Button("연속 적재 중단 (흡착 유지)"))a.tote.StopAutoStack();EditorGUILayout.HelpBox(a.tote.Status,MessageType.None);}
 
  using(new EditorGUI.DisabledScope(!Application.isPlaying))if(GUILayout.Button("적재 중단 (흡착 유지)"))a.StopLoading();if(Application.isPlaying)Repaint();}
 }

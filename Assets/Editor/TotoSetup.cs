@@ -53,7 +53,7 @@ public static class TotoSetup
             if (instance == null) { instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene); Undo.RegisterCreatedObjectUndo(instance, "Create eight-box tote"); }
             instance.transform.SetPositionAndRotation(old.transform.position, old.transform.rotation);
             var toto = instance.GetComponent<ToteBase>(); Undo.RecordObject(toto, "Connect tote loader"); toto.loader = loader;
-            Undo.RecordObject(loader, "Connect two-layer tote"); loader.toto = toto; loader.container = instance.transform; loader.slots = toto.slots;
+            Undo.RecordObject(loader, "Connect two-layer tote"); loader.tote = toto; loader.container = instance.transform; loader.slots = toto.slots;
             if (loader.targetBox == null)
                 loader.targetBox = UnityEngine.Object.FindObjectsByType<BoxCollider>().Where(b => b.attachedRigidbody != null && b.transform.Find("CardboardBody") != null)
                     .OrderBy(b => Vector3.Distance(b.bounds.center, loader.tcp.position)).FirstOrDefault();
