@@ -9247,6 +9247,25 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 1243914755738456485, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
   m_PrefabInstance: {fileID: 1804329611}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &313743279
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313743270}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fcbfadb1bffffc9498a5a4e65a63aca7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LoadSequence
+  attacher: {fileID: 313743274}
+  lane: {fileID: 107953978}
+  terminal: 3
+  cell: {fileID: 1923106629}
+  maxPickupDistance: 1
+  loadTimeLimit: 180
+  status: "\uB300\uAE30"
 --- !u!1 &314501392
 GameObject:
   m_ObjectHideFlags: 0
@@ -11259,6 +11278,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6157257827537333617, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
       insertIndex: -1
       addedObject: {fileID: 358642748}
+    - targetCorrespondingSourceObject: {fileID: 6157257827537333617, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 358642752}
   m_SourcePrefab: {fileID: 100100000, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
 --- !u!4 &358642744 stripped
 Transform:
@@ -11369,6 +11391,25 @@ MonoBehaviour:
   driveStiffness: 100000
   driveDamping: 10000
   driveForceLimit: 1000
+--- !u!114 &358642752
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 358642747}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fcbfadb1bffffc9498a5a4e65a63aca7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LoadSequence
+  attacher: {fileID: 358642748}
+  lane: {fileID: 320798661}
+  terminal: 1
+  cell: {fileID: 1923106629}
+  maxPickupDistance: 1
+  loadTimeLimit: 180
+  status: "\uB300\uAE30"
 --- !u!1001 &360203198
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -11926,6 +11967,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6157257827537333617, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
       insertIndex: -1
       addedObject: {fileID: 365759492}
+    - targetCorrespondingSourceObject: {fileID: 6157257827537333617, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 365759499}
   m_SourcePrefab: {fileID: 100100000, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
 --- !u!4 &365759488 stripped
 Transform:
@@ -12036,6 +12080,25 @@ MonoBehaviour:
   driveStiffness: 100000
   driveDamping: 10000
   driveForceLimit: 1000
+--- !u!114 &365759499
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 365759491}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fcbfadb1bffffc9498a5a4e65a63aca7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LoadSequence
+  attacher: {fileID: 365759492}
+  lane: {fileID: 1257809049}
+  terminal: 2
+  cell: {fileID: 1923106629}
+  maxPickupDistance: 1
+  loadTimeLimit: 180
+  status: "\uB300\uAE30"
 --- !u!1 &373590118
 GameObject:
   m_ObjectHideFlags: 0
@@ -50734,6 +50797,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6157257827537333617, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
       insertIndex: -1
       addedObject: {fileID: 313743274}
+    - targetCorrespondingSourceObject: {fileID: 6157257827537333617, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 313743279}
   m_SourcePrefab: {fileID: 100100000, guid: cfda612bd55ef164f807c6001d9e180c, type: 3}
 --- !u!1001 &1805059243
 PrefabInstance:
@@ -54748,20 +54814,10 @@ MonoBehaviour:
   reader: {fileID: 364646188}
   placeholderRead: 0
   correction: {fileID: 1430163190}
-  terminalStations:
-  - destination: 1
-    line: {fileID: 320798661}
-    loader: {fileID: 358642748}
-    maxPickupDistance: 1
-  - destination: 2
-    line: {fileID: 1257809049}
-    loader: {fileID: 365759492}
-    maxPickupDistance: 1
-  - destination: 3
-    line: {fileID: 107953978}
-    loader: {fileID: 313743274}
-    maxPickupDistance: 1
-  loadingTimeLimit: 180
+  loadSequences:
+  - {fileID: 358642752}
+  - {fileID: 365759499}
+  - {fileID: 313743279}
 --- !u!4 &1923106630
 Transform:
   m_ObjectHideFlags: 0

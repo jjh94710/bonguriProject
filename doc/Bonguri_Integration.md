@@ -120,3 +120,14 @@ BoxAttacher의 Z 방향도 Z Direction 설정으로 접근·상승·이동·분�
 현재 씬의 받침대를 포함한 배치에서 A/B/C 각각 8개, 총 24개를 실제 흡착·운반·적재했다. 집기 방향은 X/Y/Z/X/Y/Z/X/Y 순서였다. 아래층 4칸 뒤 위층 4칸의 적재 순서를 확인했고, 완료 뒤 세 수거함의 모든 슬롯 위치·자세·안정 조건과 상자 사이 겹침 검사를 통과했다. 9번째 상자는 TryLoadBox가 만적 사유로 접수를 거부했으며 Count=8과 로봇 대기 상태를 유지했다. 실제 결과는 results/eight_box_check/latest.json에 보존한다.
 
 시험은 투입·분류를 생략하고 각 로봇 앞에 상자를 하나씩 생성한 적재 집중 검증이다. 컨트롤러의 만적 대기열·자동 비우기·AGV 반출을 검증한 것은 아니다. 완료 장면은 Play 일시정지 상태로 남겼다. 재현 메뉴는 Tools > Bonguri > Integration > Verify Eight Boxes Per Tote A B C이며, 빈 수거함의 새 Play 세션에서 실행한다.
+
+
+### 터미널 적재 책임을 LoadSequence로 이동
+
+CellController는 전체 운전 시작/정지, 알람, 최종 Finish 집계를 맡고 A/B/C 로봇에 붙인 LoadSequence를 시작/중단한다. LoadSequence가 NextLine 이송, 최종 정지점 대기, 집기 거리 확인, TryLoadBox 인계, 최대 2회 시도(회당 180초), 실제 PlacedBoxes 확인 뒤 TakeAway 및 Finish(box, 실제 터미널), 실패 상자 보존/수동 재시도, 만적 대기를 담당한다. CellController의 중복 적재 루프는 제거했다. 만적 자동 삭제는 적용하지 않았으며 EmptyContainer는 작업자 명령으로만 동작한다. BoxAttacher/BackArmIK 및 로봇·수거함 위치는 변경하지 않았다. 연결 메뉴 Connect Terminal Loading To Cell은 LoadSequence 세 개와 CellController 참조를 설정한다.
+
+실제 투입 → ONNX 판정 → OCR 판독 → 분류 → 벨트 이송 → 적재 시험에서 3개 모두 실제 적재·집계에 성공했다(A=X, B/C=Z). C는 첫 경로 계획 실패 후 두 번째 시도로 완료했다. 원본 results/load_sequence_check/integration.json, integration_events.log. 첫 실행은 검증 도구의 전체 150초 제한이 먼저 끝나 중단됐고, 도구의 전체 대기를 600초로 늘려 재검증했다. 공정의 회당 적재 제한은 180초를 유지했다.
+
+추가로 Verify LoadSequence Transfer Retry And Full Totes 메뉴에서 로봇별 터미널 입구에 X/Y/Z/X/Y/Z/X/Y 상자를 Feed하여 실제 이송·정지·적재를 확인했다. 이 시험은 상류 판정/판독/분류와 Cell 집계를 제외하고 Play 중에만 sequence.cell=null로 단독 실행한다. A 첫 상자의 제한시간을 일시적으로 0으로 만들어 자동 2회 시도 복구를 확인했고, B 첫 상자를 NG로 지정해 움직임/집계 없이 보존되는지 확인한 뒤 목적지를 고쳐 RetryFailed로 복구했다.
+
+B/C는 각각 8칸 위치·자세·안정·상자 겹침 검사를 통과했다. 각각 9번째 상자가 만적 상태에서 벨트 정지점/kinematic/LoadedCount=8을 유지하는지 확인하고, EmptyContainer로 8개를 비운 뒤 동일 9번째 상자의 실제 적재 및 LoadedCount=9, EmptiedCount=8까지 확인했다. A는 2개 적재 후 세 번째 Z 방향에서 두 번 모두 경로 탐색에 실패해 작업자 확인 대기로 남았으므로 전체 연속 시험 결과는 실패다. A의 같은 상자를 Inspector의 BoxAttacher.LoadNextBox로 직접 실행해도 접근 후보 3개·회전 검사 216회·중간 IK 오차 3.1mm/0.8도의 동일 경로 실패를 재현했다. 이는 흡착 전 경로 계산 비교이며, 직접 실행 시 상자는 실패 뒤 kinematic 상태를 유지했다. LoadSequence를 우회해도 실패하므로 해당 벨트 정지점/이전 자세에서의 로봇 경로 문제를 별도로 해결해야 한다. 이전 8개 직접 생성 시험 성공이 실제 벨트 정지 조건의 모든 연속 집기를 보장하지는 않는다. 원본 results/load_sequence_check/latest.json, events.log, direct_A_comparison.json. 시험 종료 후 Play를 나가 시험 전용 참조·속도·제한시간 변경을 복원했다.

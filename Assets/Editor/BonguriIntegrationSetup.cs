@@ -36,6 +36,7 @@ public static class BonguriIntegrationSetup
             if (command == "audit-loading-layout") MatchTerminalLayout(false);
             if (command == "match-loading-layout") MatchTerminalLayout(true);
             if (command == "add-tote-pedestals") AddTotePedestals();
+            if (command == "run-sequence-check") BonguriLoadSequenceCheck.Run();
             if (command == "run-eight-box-check") BonguriEightBoxCheck.Run();
             if (command == "run-top" || command == "run-side" || command == "run-random")
             {
@@ -232,15 +233,24 @@ public static class BonguriIntegrationSetup
         string backup="Temp/BonguriIntegrationBackup/before_loading_handoff_"+DateTime.Now.ToString("yyyyMMdd_HHmmss")+".unity";
         if(!EditorSceneManager.SaveScene(scene,backup,true))throw new IOException("Scene backup failed.");
         Undo.RecordObject(cell,"Connect terminal loading to CellController");
-        var edit=new SerializedObject(cell);var array=edit.FindProperty("terminalStations");array.arraySize=3;
-        var report=new StringBuilder("CellController terminal loading connections\n");
+        var edit=new SerializedObject(cell);var array=edit.FindProperty("loadSequences");array.arraySize=3;
+        var report=new StringBuilder("CellController -> LoadSequence terminal loading connections\n");
         for(int i=0;i<pairs.Length;i++)
         {
-            var item=array.GetArrayElementAtIndex(i);var pair=pairs[i];
-            item.FindPropertyRelative("destination").enumValueIndex=(int)pair.destination;
-            item.FindPropertyRelative("line").objectReferenceValue=pair.line;
-            item.FindPropertyRelative("loader").objectReferenceValue=pair.loader;
-            item.FindPropertyRelative("maxPickupDistance").floatValue=1f;
+            var pair=pairs[i];
+            var sequence=pair.loader.GetComponent<LoadSequence>();
+            if(sequence==null) sequence=Undo.AddComponent<LoadSequence>(pair.loader.gameObject);
+            Undo.RecordObject(sequence,"Connect LoadSequence");
+            var sequenceEdit=new SerializedObject(sequence);
+            sequenceEdit.FindProperty("attacher").objectReferenceValue=pair.loader;
+            sequenceEdit.FindProperty("lane").objectReferenceValue=pair.line;
+            sequenceEdit.FindProperty("terminal").enumValueIndex=(int)pair.destination;
+            sequenceEdit.FindProperty("cell").objectReferenceValue=cell;
+            sequenceEdit.FindProperty("maxPickupDistance").floatValue=1f;
+            sequenceEdit.FindProperty("loadTimeLimit").floatValue=180f;
+            sequenceEdit.ApplyModifiedProperties();
+            EditorUtility.SetDirty(sequence);
+            array.GetArrayElementAtIndex(i).objectReferenceValue=sequence;
             float distance=Vector3.Distance(pair.loader.transform.position,pair.line.StopPoint.position);
             report.AppendLine(pair.destination+": "+pair.line.name+" -> "+pair.loader.name+", stop-to-base="+distance.ToString("F3")+"m");
         }

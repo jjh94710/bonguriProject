@@ -80,7 +80,7 @@ public static class BonguriTerminalLoadingCheck
                 if(routeOnly)
                 {
                     // Isolate conveyor arrival from pickup. Play exit restores these scene-only overrides.
-                    var edit=new SerializedObject(cell);edit.FindProperty("terminalStations").arraySize=0;edit.ApplyModifiedPropertiesWithoutUndo();
+                    var edit=new SerializedObject(cell);edit.FindProperty("loadSequences").arraySize=0;edit.ApplyModifiedPropertiesWithoutUndo();
                     foreach(var line in UnityEngine.Object.FindObjectsByType<ConveyorLine>(FindObjectsSortMode.None).Where(l=>l.UsesSurfacePath))
                     {var lane=new SerializedObject(line);lane.FindProperty("speed").floatValue=1;lane.ApplyModifiedPropertiesWithoutUndo();}
                 }
@@ -215,7 +215,7 @@ public static class BonguriPickupCheck
     static BoxAttacher[] loaders;
     static Item[] items;
     static double began,nextRecord;
-    static bool started;
+    static bool started,oldBackground;
     static readonly List<string> events=new List<string>();
     static readonly HashSet<BoxInfo> oriented=new HashSet<BoxInfo>();
     [Serializable] sealed class Item
@@ -252,6 +252,7 @@ public static class BonguriPickupCheck
         {
             if(!started)
             {
+                oldBackground=Application.runInBackground;Application.runInBackground=true;
                 started=true;began=EditorApplication.timeSinceStartup;nextRecord=0;events.Clear();oriented.Clear();Application.logMessageReceived+=Log;
                 cell=UnityEngine.Object.FindFirstObjectByType<CellController>();
                 if(!cell.ValidateTerminalConfiguration(out string error))throw new Exception(error);
@@ -277,6 +278,7 @@ public static class BonguriPickupCheck
                 }
                 else cell.Run(3);
             }
+            EditorApplication.QueuePlayerLoopUpdate();
             // Controlled comparison only: every newly fed parcel has its suction face along X.
             if(SessionState.GetBool(Key+".UniformX",false))
                 foreach(var box in UnityEngine.Object.FindObjectsByType<BoxInfo>(FindObjectsSortMode.None).Where(b=>!string.IsNullOrEmpty(b.boxId)))
@@ -295,14 +297,14 @@ public static class BonguriPickupCheck
             }
             bool settled=SessionState.GetBool(Key+".DirectZ",false)||loaders.All(l=>l.targetBox==null||l.PlacedBoxes.Contains(l.targetBox)||l.targetBox.GetComponent<BoxInfo>().state!=BoxState.Loading);
             bool done=settled&&items.All(i=>i.attempted&&!i.busy)&&(SessionState.GetBool(Key+".DirectZ",false)||cell.Processed>=items.Count(i=>i.placed));
-            bool timeout=EditorApplication.timeSinceStartup-began>(SessionState.GetBool(Key+".DirectZ",false)?600:150);
+            bool timeout=EditorApplication.timeSinceStartup-began>600;
             if(done||timeout)
             {
                 Write(true,timeout?"Pickup check timed out.":null);SessionState.SetBool(Key,false);Application.logMessageReceived-=Log;
-                EditorApplication.isPlaying=false;return;
+                Application.runInBackground=oldBackground;EditorApplication.isPlaying=false;return;
             }
             if(EditorApplication.timeSinceStartup>=nextRecord){Write(false,null);nextRecord=EditorApplication.timeSinceStartup+1;}
         }
-        catch(Exception e){Write(true,e.ToString());SessionState.SetBool(Key,false);Application.logMessageReceived-=Log;EditorApplication.isPlaying=false;}
+        catch(Exception e){Write(true,e.ToString());SessionState.SetBool(Key,false);Application.logMessageReceived-=Log;Application.runInBackground=oldBackground;EditorApplication.isPlaying=false;}
     }
 }
