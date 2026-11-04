@@ -74,7 +74,7 @@ public class CellController : MonoBehaviour
 
     [Header("터미널 적재 (A / B / C)")]
     [Tooltip("로봇별 LoadSequence. 전체 운전 시작/정지는 CellController가 지시한다.")]
-    [SerializeField] LoadSequence[] loadSequences = new LoadSequence[0];
+    [SerializeField] LoadSequence[] loaders = new LoadSequence[0];
     public bool IsAlarmActive => alarmActive;
 
                         ///// : TODO : 
@@ -359,7 +359,7 @@ public class CellController : MonoBehaviour
 
         Coroutine correctLoop = StartCoroutine(CorrectStationLoop());
         Coroutine readLoop = StartCoroutine(ReadStationLoop());
-        foreach (var sequence in loadSequences) sequence.StartLoading();
+        foreach (var sequence in loaders) { sequence.StartLoading(); }
 
         while (!alarmActive)
         {
@@ -391,36 +391,39 @@ public class CellController : MonoBehaviour
     public bool ValidateTerminalConfiguration(out string error)
     {
         error = null;
-        if (loadSequences == null) { error = "Load Sequences 배열이 없습니다."; return false; }
+        if (this.loaders == null) 
+            { error = "Load Sequences 배열이 없습니다."; return false; }
         var destinations = new HashSet<Destination>();
         var lanes = new HashSet<ConveyorLine>();
         var loaders = new HashSet<BoxAttacher>();
-        foreach (var sequence in loadSequences)
+        foreach (var sequence in this.loaders)
         {
-            if (sequence == null) { error = "LoadSequence 연결이 비었습니다."; return false; }
-            if (!sequence.ValidateConfiguration(out error)) return false;
+            if (sequence == null) 
+                { error = "LoadSequence 연결이 비었습니다."; return false; }
+            if (!sequence.ValidateConfiguration(out error)) { return false; }
             if (sequence.Cell != this || !destinations.Add(sequence.Terminal) ||
                 !lanes.Add(sequence.EndLine) || !loaders.Add(sequence.Attacher))
-            { error = "LoadSequence의 Cell/터미널/최종 구간/로봇이 잘못됐거나 중복입니다."; return false; }
+                { error = "LoadSequence의 Cell/터미널/최종 구간/로봇이 잘못됐거나 중복입니다."; return false; }
         }
         return true;
     }
     public void RetryTerminalLoading(Destination terminal)
     {
-        foreach (var sequence in loadSequences)
-            if (sequence != null && sequence.Terminal == terminal) sequence.RetryFailed();
+        foreach (var sequence in loaders)
+            if (sequence != null && sequence.Terminal == terminal) { sequence.RetryFailed(); }
     }
     void StopTerminalLoaders()
     {
-        if (loadSequences == null) return;
-        foreach (var sequence in loadSequences) if (sequence != null) sequence.StopLoading();
+        if (loaders == null) { return; }
+        foreach (var sequence in loaders)
+            if (sequence != null) { sequence.StopLoading(); }
     }
 
     void OnDisable()
     {
         IsRunning = false;
         StopAllCoroutines();
-        if (feeder != null) feeder.StopFeeding();
+        if (feeder != null) { feeder.StopFeeding(); }
         StopTerminalLoaders();
     }
 
