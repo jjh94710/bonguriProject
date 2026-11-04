@@ -10,7 +10,7 @@ using UnityEngine;
 //      - 이벤트 파일: 이상 이벤트, 제어 방식 전환, 알람 정지 · 해제마다 1줄. Play를 끝낼 때 세션 요약 1줄.
 //
 //  [사용] CellController와 같은 오브젝트("Cell")에 붙이고, CellController의 Log 칸에 넣는다.
-//  [파일] 프로젝트 폴더/Logs/boxes_날짜_시각.csv, events_날짜_시각.csv (Assets 폴더 옆, Play할 때마다 새 파일)
+//  [파일] 프로젝트 폴더/Reports/boxes_날짜_시각.csv, events_날짜_시각.csv (Assets 폴더 옆, Play할 때마다 새 파일)
 //         처음 기록할 때 두 파일을 함께 만든다. 아무것도 기록하지 않은 Play는 파일을 만들지 않는다.
 //  [!] 엑셀은 Play를 멈춘 뒤 연다 (Play 중에는 Unity가 파일을 쓰고 있다).
 //  [!] 한 줄 쓸 때마다 Flush한다. 에디터가 멈춰도 그 전까지의 기록은 남는다.

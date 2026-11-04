@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 //  ============================================================
 //  CellController
@@ -9,10 +10,10 @@ using UnityEngine;
 //      - 상자가 터미널 컨테이너나 NG 토트에 들어가면 Finish()로 최종 상태를 정하고 집계한다.
 //      - 이상 상황은 RaiseAlarm()로 알리고, 같은 경고가 연속되면 알람으로 멈춘다.
 //
-                    ///// : TODO : 현재는 골격만 세워진 단계
-//  [골격 단계] 설정 복사, 설비 상태, 운전 명령, 제어 방식, 알람, 집계까지 들어 있다.
-//             스테이션 동작과 다른 스크립트 연결은 그 스크립트를 만들 때 하나씩 채운다 ([다음 단계] 표시).
-//  
+//  [연결]      투입(BoxFeeder) → 교정(CorrectionSequence) → 판독(LabelReader) → 적재(LoadSequence 3대). 기록은 ProductionLog.
+//  [제한 시간] 교정 스테이션 전체는 correctTimeLimit, 송장 면 판정 1회는 judgeTimeLimit (이 스크립트).
+//             투입 지연은 BoxFeeder, 판독 1회는 LabelReader, 적재 1회는 LoadSequence가 각자 잰다.
+//
 //  [사용]      공정 씬에 빈 오브젝트 "Cell"을 만들고 붙인다. 다른 스크립트는 Inspector 칸으로 이 컴포넌트를 받는다.
 //
 //  [설계서와의 차이]
@@ -32,6 +33,11 @@ using UnityEngine;
 //      * 제어 방식(FR-12)은 송장 면 판정만 다르다. 기본 제어 = 색 비율 판정, 학습 정책 = 송장 유무 ONNX 판정(LabelPresenceDetector, 지도학습).
 //        회전은 두 방식 모두 규칙으로 정한다 (설계서: CorrectionAgent 강화학습. 11/03 팀 원칙으로 지훈님 지도학습 판정을 따른다).
 //      * 시작 제어 방식은 startMode 칸으로 정한다. 학습 정책인데 모델이 없으면 기본 제어로 시작한다.
+//      * 로그(ProductionLog)는 선택 칸이다. 비우면 CSV를 남기지 않는다. 운전 시작 · 끝도 이벤트로 남긴다.
+//      * supplyTimeout · readTimeout · inferenceTimeout 칸은 두지 않았다. 투입 지연은 BoxFeeder, 판독 2초는 LabelReader가 재고,
+//        ONNX 추론은 한 프레임 안에 끝나므로 끝난 뒤 걸린 시간을 judgeTimeLimit과 비교한다.
+//      * 알람 정지 때 벨트는 세우지 않는다. 투입 · 스테이션 · 적재 로봇이 멈추므로 상자는 정지 위치와 앞 상자 뒤에서 선다.
+//      * 송장 미부착 · 판독 실패는 판독 스테이션에서, 오분류 도착은 Finish()에서 경고를 올린다 (푸셔가 이미 알린 상자는 빼고).
 //  ============================================================
 public class CellController : MonoBehaviour
 {
@@ -45,6 +51,9 @@ public class CellController : MonoBehaviour
 
     [Tooltip("교정 스테이션 제한 시간(초). 도착부터 이 시간이 지나면 더 돌리지 않고 판독 구간으로 보낸다 (default: 10)")]
     [Min(1f)][SerializeField] float correctTimeLimit = 10f;
+
+    [Tooltip("송장 면 판정 1회 제한 시간(초). 촬영부터 판정까지 이 시간을 넘으면 판정 실패(JudgeFail)로 보낸다 (default: 2)")]
+    [Min(0.1f)][SerializeField] float judgeTimeLimit = 2f;
 
     [Tooltip("시작할 때 제어 방식. Policy인데 Face Detector에 모델이 없으면 Basic으로 시작한다 (default: Policy)")]
     [SerializeField] ControlMode startMode = ControlMode.Policy;
@@ -73,14 +82,12 @@ public class CellController : MonoBehaviour
     [SerializeField] CorrectionSequence correction;
 
     [Header("터미널 적재 (A / B / C)")]
-    [Tooltip("로봇별 LoadSequence. 전체 운전 시작/정지는 CellController가 지시한다.")]
+    [Tooltip("로봇별 LoadSequence. 비우면 분류까지만 돈다. 전체 운전 시작 · 정지는 CellController가 지시한다")]
+    [FormerlySerializedAs("loadSequences")]
     [SerializeField] LoadSequence[] loaders = new LoadSequence[0];
-    public bool IsAlarmActive => alarmActive;
 
-                        ///// : TODO : 
-    //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
-    //      log (ProductionLog)                      세션 로그
-    //      제한 시간: supplyTimeout 30, readTimeout 2, inferenceTimeout 1 (초)
+    [Tooltip("(선택) 세션 로그 (ProductionLog). 같은 오브젝트에 붙여 넣는다. 비우면 CSV를 남기지 않는다")]
+    [SerializeField] ProductionLog log;
 
 
     //  ============================================================
@@ -111,15 +118,27 @@ public class CellController : MonoBehaviour
     public int[] TerminalCounts { get; private set; } = new int[3];
     public int[] ExceptionsByReason { get; private set; } = new int[System.Enum.GetValues(typeof(ExceptionReason)).Length];
 
-                        ///// : TODO : 
-    /// [ConveyorLine 구현 후] StationWaitSeconds(교정 스테이션 대기 시간)는 ConveyorLine 연결 후 추가한다.
     /// 시간당 판별량 = 최근 60초 처리 수 × 60, 예외율 (0 ~ 1)    (FR-10)
     public float ThroughputPerHour => finishTimes.Count * 60f;
     public float ExceptionRate => Processed > 0 ? (float)Exceptions / Processed : 0f;
 
+    /// 교정 스테이션 대기 시간(초): 지금 정지 위치에서 처리 중인 상자가 도착한 뒤 지난 시간. 없으면 0    (FR-10)
+    /// LastStationSeconds = 마지막으로 보낸 상자가 교정 스테이션에 머문 시간 (도착 → 판독 구간으로 보냄)
+    public float StationWaitSeconds => stationBox != null ? Time.time - stationBox.correctArriveTime : 0f;
+    public float LastStationSeconds { get; private set; }
+
+    /// 마지막 송장 면 판정 1회에 걸린 시간 (ms, 촬영 + 판정)
+    public double LastJudgeMilliseconds { get; private set; }
+
     /// 운전 중인지 (Run()을 부른 뒤 끝나기 전까지)
     /// [!] RunRoutine()이 시작하자마자 true로 바꾼다. 스테이션 코루틴이 바로 이 값을 보고 돌기 때문.
     public bool IsRunning { get; private set; }
+
+    /// 알람으로 멈춘 상태인지 (ResetAlarm()으로 해제). LoadSequence가 읽는다
+    public bool IsAlarmActive => alarmActive;
+
+    /// 세션 로그 (Log 칸이 비어 있으면 null). 화면에 CSV 파일 경로를 보일 때 쓴다
+    public ProductionLog Log => log;
 
     /// 이상 상황 알림 (종류, 상자 ID) --> AlarmUI가 구독
     public event System.Action<string, string> OnAlarm;
@@ -130,6 +149,8 @@ public class CellController : MonoBehaviour
     int consecutiveErrors;                                  //  같은 경고가 연속된 횟수
     readonly Queue<float> finishTimes = new Queue<float>(); //  최근 60초 안의 처리 시각
     int testCount;                                          //  테스트 상자 번호
+    BoxInfo stationBox;                                     //  교정 스테이션에서 처리 중인 상자 (대기 시간 표시용)
+    readonly HashSet<string> sortFailAlarmed = new HashSet<string>();   //  푸셔가 "분류 실패"를 이미 알린 상자 ID (Finish()에서 다시 알리지 않게)
 
 
     //  ============================================================
@@ -156,14 +177,14 @@ public class CellController : MonoBehaviour
         Mode = mode;
         PendingMode = mode;
         if (mode != startMode)
-            { Debug.Log("[Cell] 학습 정책 모델이 없어 기본 제어로 시작합니다.", this); }
+        { Debug.Log("[Cell] 학습 정책 모델이 없어 기본 제어로 시작합니다.", this); }
     }
 
     // 60초가 지난 처리 시각을 버린다 (시간당 판별량 계산용).
     void Update()
     {
         while (finishTimes.Count > 0 && Time.time - finishTimes.Peek() > 60f)
-            { finishTimes.Dequeue(); }
+        { finishTimes.Dequeue(); }
     }
 
 
@@ -215,6 +236,7 @@ public class CellController : MonoBehaviour
         }
         PendingMode = mode;
         Debug.Log($"[Cell] 제어 방식 예약: {mode} (다음 상자부터)", this);
+        if (log != null) { log.WriteModeChange(mode); }
         return true;
     }
 
@@ -231,8 +253,8 @@ public class CellController : MonoBehaviour
 
         Debug.LogWarning($"[Cell] 경고 | {type} | {boxId} ({consecutiveErrors}회 연속)", this);
         OnAlarm?.Invoke(type, boxId);
-        ///// : TODO : 
-        //  [다음 단계] log.Event(type, boxId);
+        if (log != null) { log.WriteEvent(type, boxId); }
+        if (type == "분류 실패" && !string.IsNullOrEmpty(boxId)) { sortFailAlarmed.Add(boxId); }
 
         if (consecutiveErrors >= maxConsecutiveErrors && !alarmActive)
         {
@@ -242,11 +264,10 @@ public class CellController : MonoBehaviour
             if (feeder != null) { feeder.StopFeeding(); }       // 운전 전 테스트에서도 불릴 수 있어 빈 칸을 확인한다
             if (correction != null) { correction.Stop(); }      // 교정 로봇은 그 자리에서 관절각을 유지한다 (손가락은 그대로)
             StopTerminalLoaders();
-
-                                ///// : TODO : 
-            //  [다음 단계] 벨트 정지 (ConveyorLine에 정지 명령을 만들 때)
+            //  벨트는 세우지 않는다. 상자는 정지 위치와 앞 상자 뒤에서 선다
 
             Debug.LogError($"[Cell] 알람 정지 | {type} {consecutiveErrors}회 연속", this);
+            if (log != null) { log.WriteEvent("알람 정지", boxId, $"{type} {consecutiveErrors}회 연속"); }
         }
     }
 
@@ -259,6 +280,14 @@ public class CellController : MonoBehaviour
         consecutiveErrors = 0;
         lastAlarmType = null;
         Debug.Log("[Cell] 알람 해제 | Run()으로 다시 시작", this);
+        LogEvent("알람 해제", "");
+    }
+
+    // 경고가 아닌 기록을 이벤트 로그에만 남긴다 (운전 시작 · 끝, 컨테이너 비움 등). 연속 횟수와 OnAlarm에는 들어가지 않는다.
+    /// [호출] RunRoutine(), ResetAlarm(). 다른 스크립트도 부를 수 있다 (예: 컨테이너 비움). Log 칸이 비어 있으면 아무것도 하지 않는다.
+    public void LogEvent(string type, string boxId, string detail = "")
+    {
+        if (log != null) { log.WriteEvent(type, boxId, detail); }
     }
 
 
@@ -269,7 +298,9 @@ public class CellController : MonoBehaviour
     /// [호출] 상자가 터미널 컨테이너나 NG 토트에 들어갈 때 ToteBase.Add()가 부른다 (터미널은 끝 로봇이 내려놓은 뒤).
     /// [!] 같은 상자를 두 번 넘겨도 한 번만 센다 (이미 최종 상태면 무시).
     public void Finish(BoxInfo box)
-    { Finish(box, box != null ? box.destination : Destination.None); }
+    { 
+        Finish(box, box != null ? box.destination : Destination.None); 
+    }
 
     public void Finish(BoxInfo box, Destination actualDestination)
     {
@@ -283,6 +314,7 @@ public class CellController : MonoBehaviour
         finishTimes.Enqueue(Time.time);
 
         string result;
+        bool sortFail = false;
         if (box.destination == Destination.NG || box.reason != ExceptionReason.None)
         {
             //  1) 예외: NG 토트에 들어간 상자
@@ -308,13 +340,21 @@ public class CellController : MonoBehaviour
             else
             {
                 Fail++;
+                sortFail = true;
                 result = $"분류 실패 (정답 {answer})";
             }
         }
 
         Debug.Log($"[Cell] {box.boxId} {result} | 목적지 {box.destination} | 실제 도착 {actualDestination} | 회전 {box.rotationCount}회", this);
-                            ///// : TODO : 
-        //  [다음 단계] log.Write(box);
+        if (log != null) { log.WriteBox(box, result); }
+
+        //  오분류 도착은 경고로 알린다. 푸셔가 밀지 못해 이미 "분류 실패"를 알린 상자는 다시 알리지 않는다    (FR-11)
+        bool alreadyAlarmed = sortFailAlarmed.Remove(box.boxId ?? "");
+        if (sortFail && !alreadyAlarmed)
+        {
+            RaiseAlarm("분류 실패", box.boxId);
+            sortFailAlarmed.Remove(box.boxId ?? "");
+        }
     }
 
     // 정답 목적지: 송장 정답(labelNumber, labelRegion)을 지역 코드 표로 찾은 터미널. 규칙 위반이면 NG.
@@ -346,6 +386,7 @@ public class CellController : MonoBehaviour
         Mode = PendingMode;
         State = CellState.Running;
         Debug.Log($"[Cell] 운전 시작 | {(count > 0 ? $"상자 {count}개" : "연속 운전")} | 제어 방식 {Mode}", this);
+        LogEvent("운전 시작", "", $"{(count > 0 ? $"상자 {count}개" : "연속 운전")} | {Mode}");
 
         //  투입을 먼저 시작한다. Feeder의 칸이 비어 시작하지 못하면 운전도 멈춘다
         feeder.StartFeeding(count);
@@ -376,9 +417,11 @@ public class CellController : MonoBehaviour
         StopCoroutine(correctLoop);
         StopCoroutine(readLoop);
         StopTerminalLoaders();
+        stationBox = null;
         State = CellState.Stopped;
         IsRunning = false;
         Debug.Log($"[Cell] 운전 끝 | {Summary()}", this);
+        LogEvent("운전 끝", "", Summary());
     }
 
     // 처리 중인 상자 수 (투입했지만 아직 Finish()되지 않은 상자).
@@ -388,30 +431,36 @@ public class CellController : MonoBehaviour
         return feeder != null ? feeder.InProcess : 0;
     }
 
+    // 터미널 적재 연결 확인. 로봇마다 ValidateConfiguration()을 부르고, Cell · 터미널 · 마지막 구간 · 로봇이 겹치지 않는지 본다.
+    /// [호출] Check() (운전 시작 전), 에디터 도구 (Tools/Bonguri). 빈 배열이면 true (분류까지만 돈다).
     public bool ValidateTerminalConfiguration(out string error)
     {
         error = null;
-        if (this.loaders == null) 
-            { error = "Load Sequences 배열이 없습니다."; return false; }
+        if (loaders == null)
+        { error = "Loaders 배열이 없습니다."; return false; }
         var destinations = new HashSet<Destination>();
         var lanes = new HashSet<ConveyorLine>();
-        var loaders = new HashSet<BoxAttacher>();
-        foreach (var sequence in this.loaders)
+        var attachers = new HashSet<BoxAttacher>();
+        foreach (var sequence in loaders)
         {
-            if (sequence == null) 
-                { error = "LoadSequence 연결이 비었습니다."; return false; }
+            if (sequence == null)
+            { error = "Loaders에 빈 칸이 있습니다."; return false; }
             if (!sequence.ValidateConfiguration(out error)) { return false; }
             if (sequence.Cell != this || !destinations.Add(sequence.Terminal) ||
-                !lanes.Add(sequence.EndLine) || !loaders.Add(sequence.Attacher))
-                { error = "LoadSequence의 Cell/터미널/최종 구간/로봇이 잘못됐거나 중복입니다."; return false; }
+                !lanes.Add(sequence.EndLine) || !attachers.Add(sequence.Attacher))
+            { error = "LoadSequence의 Cell/터미널/최종 구간/로봇이 잘못됐거나 중복입니다."; return false; }
         }
         return true;
     }
+
+    // 적재에 실패해 레인 끝에 남은 상자를 그 터미널 로봇이 다시 집게 한다 (작업자가 원인을 고친 뒤).
     public void RetryTerminalLoading(Destination terminal)
     {
         foreach (var sequence in loaders)
             if (sequence != null && sequence.Terminal == terminal) { sequence.RetryFailed(); }
     }
+
+    // 적재 로봇을 모두 멈춘다 (운전 끝, 알람 정지, 꺼질 때).
     void StopTerminalLoaders()
     {
         if (loaders == null) { return; }
@@ -419,6 +468,7 @@ public class CellController : MonoBehaviour
             if (sequence != null) { sequence.StopLoading(); }
     }
 
+    // 컴포넌트가 꺼지거나 Play를 끝낼 때 투입 · 코루틴 · 적재 로봇을 멈춘다.
     void OnDisable()
     {
         IsRunning = false;
@@ -435,10 +485,11 @@ public class CellController : MonoBehaviour
         {
             //  1) 정지 위치에 상자가 올 때까지 기다린다
             if (!correctLine.HasBoxAtStop)
-                { yield return null; continue; }
+            { yield return null; continue; }
 
             BoxInfo box = correctLine.CurrentBox;
             box.correctArriveTime = Time.time;
+            stationBox = box;
             Mode = PendingMode;         // 제어 방식은 상자 단위로 바뀐다 (FR-12)
             box.mode = Mode;
             box.state = BoxState.Judging;
@@ -452,6 +503,8 @@ public class CellController : MonoBehaviour
             if (!IsRunning) { yield break; }
 
             box.state = BoxState.Transferring;
+            LastStationSeconds = Time.time - box.correctArriveTime;
+            stationBox = null;
             correctLine.Release();
         }
     }
@@ -459,14 +512,22 @@ public class CellController : MonoBehaviour
     // 측정 → 행동 선택(완료 또는 회전) → 회전 뒤 다시 측정. 완료 · 회전 한도 · 제한 시간 중 하나가 될 때까지 반복.
     /// [종료] 회전이 maxRotations에 닿거나 correctTimeLimit이 지나면 더 돌리지 않고 끝낸다 (예외 표시는 하지 않는다).
     ///        송장이 끝내 위로 오지 않은 상자는 판독 스테이션에서 NoLabel이 된다.
-    /// [!] 카메라가 없어 측정하지 못하면 JudgeFail로 표시하고 바로 끝낸다. 교정 로봇이 실패해도 바로 끝낸다 (CorrectionFail 표시는 CorrectAt()이 한다).
+    /// [!] 카메라가 없어 측정하지 못하거나 판정이 judgeTimeLimit을 넘으면 JudgeFail로 표시하고 바로 끝낸다.
+    ///     교정 로봇이 실패해도 바로 끝낸다 (CorrectionFail 표시는 CorrectAt()이 한다).
     /// 측정 방식은 상자의 제어 방식(box.mode)을 따른다. 학습 정책이면 ONNX, 기본 제어면 색 비율.
     IEnumerator JudgeAndCorrect(BoxInfo box)
     {
         while (true)
         {
-            //  1) 측정
+            //  1) 측정. judgeTimeLimit을 넘으면 판정 실패로 끝낸다    (FR-03)
             if (!Measure(box, box.mode == ControlMode.Policy)) { yield break; }
+            if (LastJudgeMilliseconds > judgeTimeLimit * 1000.0)
+            {
+                box.Mark(ExceptionReason.JudgeFail);
+                RaiseAlarm("판정 시간 초과", box.boxId);
+                Debug.LogWarning($"[Cell] 판정 시간 초과 | {box.boxId} | {LastJudgeMilliseconds:F0} ms (제한 {judgeTimeLimit:0.#}초)", this);
+                yield break;
+            }
 
             //  2) 행동 선택. Top이면 완료
             BoxFace face = ChooseFace(box);
@@ -517,6 +578,7 @@ public class CellController : MonoBehaviour
     /// useModel = true: 송장 유무 ONNX 점수 (LabelPresenceDetector.TryJudgeBox()). false: 송장 색 비율 (FaceCameraRig.Measure()).
     /// 두 방식 모두 기준 이상 중 가장 높은 면, 모두 기준 미만이면 Bottom.
     /// 상자만 잠깐 카메라 레이어로 옮겨 찍고 되돌린다 (한 프레임 안에 끝남).
+    /// 걸린 시간은 LastJudgeMilliseconds에 남긴다 (제한 시간 확인은 JudgeAndCorrect()가 한다).
     /// [주의] 카메라나 모델이 없거나 판정에 실패하면 JudgeFail로 표시하고 false.
     bool Measure(BoxInfo box, bool useModel)
     {
@@ -542,12 +604,14 @@ public class CellController : MonoBehaviour
                 RaiseAlarm("ONNX 판정 실패: " + error, box.boxId);
                 return false;
             }
+            LastJudgeMilliseconds = faceDetector.LastMilliseconds;
             Debug.Log($"[Cell ONNX] {box.boxId} → {box.judgedFace} | {faceDetector.LastMilliseconds:F2} ms", this);
             return true;
         }
 
         //  기본 제어: 송장 색 비율로 판정한다
         //  1) 상자만 카메라 레이어로 옮겨 5면을 찍고, 원래 레이어로 되돌린다
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         int boxLayer = box.gameObject.layer;
         int rigLayer = RigLayer();
         if (rigLayer >= 0) { SetLayer(box.gameObject, rigLayer); }
@@ -556,8 +620,9 @@ public class CellController : MonoBehaviour
 
         //  2) 카메라 순서(CapturedFaces) --> faceRatios 순서(BoxFace). 지금은 두 순서가 같다
         for (int i = 0; i < FaceCameraRig.FaceCount; i++)
-            { box.faceRatios[(int)FaceCameraRig.CapturedFaces[i]] = ratios[i]; }
+        { box.faceRatios[(int)FaceCameraRig.CapturedFaces[i]] = ratios[i]; }
         box.judgedFace = faceRig.JudgeFace(ratios);
+        LastJudgeMilliseconds = clock.Elapsed.TotalMilliseconds;
 
         //  3) 로그. 송장이 있는 상자는 실제 송장 방향(LabelFaceNow)과 비교해, 판정이 다르면 경고한다 (테스트 확인용)
         string text = $"{box.boxId} 측정 | 판정 {box.judgedFace} | " +
@@ -565,7 +630,7 @@ public class CellController : MonoBehaviour
                       $"왼 {box.faceRatios[3]:0.000} · 오 {box.faceRatios[4]:0.000}";
         BoxFace actual = box.LabelFaceNow;
         if (actual != BoxFace.None && actual != box.judgedFace)
-            { Debug.LogWarning($"[Cell] {text} | 실제 {actual} (판정 불일치)", this); }
+        { Debug.LogWarning($"[Cell] {text} | 실제 {actual} (판정 불일치)", this); }
         else { Debug.Log($"[Cell] {text}", this); }
         return true;
     }
@@ -619,7 +684,7 @@ public class CellController : MonoBehaviour
     static void SetLayer(GameObject root, int layer)
     {
         foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-            { child.gameObject.layer = layer; }
+        { child.gameObject.layer = layer; }
     }
 
     // 판독 스테이션: 도착 대기 → 판독 → 검증 → box.destination 기록 → 분류 구간으로 이송    (FR-04, FR-07)
@@ -631,7 +696,7 @@ public class CellController : MonoBehaviour
         {
             //  1) 정지 위치에 상자가 올 때까지 기다린다
             if (!readLine.HasBoxAtStop)
-                { yield return null; continue; }
+            { yield return null; continue; }
 
             BoxInfo box = readLine.CurrentBox;
             box.readArriveTime = Time.time;
@@ -647,7 +712,11 @@ public class CellController : MonoBehaviour
             if (!IsRunning) { yield break; }
             if (reader == null && placeholderRead) { PlaceholderRead(box); }
 
-            //  3) 분류 구간으로 보낸다
+            //  3) 판독 스테이션에서 확정되는 예외는 여기서 알린다    (FR-11)
+            if (box.reason == ExceptionReason.NoLabel) { RaiseAlarm("송장 미부착", box.boxId); }
+            else if (box.reason == ExceptionReason.ReadFail) { RaiseAlarm("판독 실패", box.boxId); }
+
+            //  4) 분류 구간으로 보낸다
             box.state = BoxState.Sorting;
             readLine.Release();
         }
@@ -673,9 +742,9 @@ public class CellController : MonoBehaviour
     //  ============================================================
     //  점검 · 요약
     //  ============================================================
-                        ///// : TODO : 
-    // 필수 칸 확인. 빠진 칸이 있으면 이름을 알려 주고 false.
-    /// [다음 단계] 연결 칸을 열 때마다 여기에 추가한다.
+    // 운전 전 확인. 필수 칸이 비었거나 준비가 안 됐으면 이유를 알려 주고 false.
+    /// 필수: Settings, Correct Line, Read Line, Feeder, Face Rig(카메라 5대), Loaders 연결, 학습 정책 모델(Policy일 때), LabelReader 모델(연결했을 때).
+    /// 선택 칸(Correction, Reader, Log, Loaders)이 비어 있으면 어떻게 도는지만 알린다.
     bool Check()
     {
         string missing = settings == null ? "Settings"
@@ -714,6 +783,22 @@ public class CellController : MonoBehaviour
                 "[Cell] Face Rig가 모든 레이어를 봅니다. 벨트 · 로봇까지 찍혀 판정이 틀립니다. '상자 레이어(ScanTarget)만 보기' 버튼을 누르세요.",
                 faceRig);
         }
+
+        //  판독: 연결했으면 OCR 모델을 미리 준비한다. 비어 있으면 placeholderRead 여부를 알린다
+        if (reader != null && !reader.ValidateConfiguration(out string readerError))
+        {
+            Debug.LogWarning("[Cell] 판독 준비 실패: " + readerError, reader);
+            return false;
+        }
+        if (reader == null)
+        {
+            if (placeholderRead) { Debug.Log("[Cell] Reader 칸이 비어 있어 송장 정답으로 목적지를 정합니다 (placeholderRead, 테스트 씬용).", this); }
+            else { Debug.LogWarning("[Cell] Reader 칸이 비어 있어 모든 상자가 판독 실패(ReadFail)로 NG에 갑니다.", this); }
+        }
+
+        //  적재 · 로그: 비어 있으면 알리기만 한다
+        if (loaders.Length == 0) { Debug.Log("[Cell] Loaders 칸이 비어 있어 분류(레인 끝)까지만 돕니다.", this); }
+        if (log == null) { Debug.Log("[Cell] Log 칸이 비어 있어 CSV 로그를 남기지 않습니다.", this); }
 
         //  교정 로봇: 비어 있으면 자리 표시로 돌린다. 있으면 제한 시간이 로봇 동작보다 짧은지 본다
         if (correction == null) { Debug.Log("[Cell] Correction 칸이 비어 있어 상자를 그 자리에서 돌립니다 (자리 표시).", this); }
