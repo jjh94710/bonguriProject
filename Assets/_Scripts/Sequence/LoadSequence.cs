@@ -16,13 +16,13 @@ using UnityEngine;
 //  [사용]  fr5_suction 루트(BoxAttacher가 있는 오브젝트)에 붙이고, CellController의 Load Sequences 칸에 넣는다.
 //          메인 씬은 지훈님 도구 Tools/Bonguri/Integration/Connect Terminal Loading To Cell이 연결한다.
 //  [!] Lane은 터미널 레인의 "첫" 구간이다. NextLine을 끝까지 따라간 마지막 구간(EndLine)의 정지 위치에서 집는다.
-//  [!] 수거함이 가득 차도 자동으로 비우지 않는다. 경고를 내고, 작업자가 비울 때까지(⋮ "테스트/컨테이너 비우기") 기다린다.
+//  [!] 수거함이 가득 차면 경고를 내고, 작업자가 비울 때까지(⋮ "테스트/컨테이너 비우기") 기다린다. Auto Empty를 켜면 비우고 이어서 싣는다.
 //  [!] 적재에 실패한 상자는 작업자가 다시 시도(RetryFailed)하기 전까지 벨트 위에 그대로 둔다.
 //  [!] Cell 칸이 비어 있으면 운전과 상관없이 혼자 돈다 (⋮ "테스트/감시 시작"으로 시험할 때).
 //
 //  [설계서와의 차이]
 //      * 흡착 · 칸 계산 · 놓기는 봉현님 BoxAttacher · ToteBase(2 × 2 × 2, 8칸)를 그대로 쓴다 (11/03 팀 원칙).
-//      * 자동 비우기(FR-08)는 하지 않는다. 가득 참 기준은 ToteBase 칸 수(8)이고, CellSettings.containerFull은 쓰지 않는다.
+//      * 자동 비우기(FR-08)는 autoEmpty 칸으로 고른다 (default: 꺼짐). 가득 참 기준은 ToteBase 칸 수(8)이고, CellSettings.containerFull은 쓰지 않는다.
 //      * 오분류 경고는 없다. Finish(box, terminal)로 실제 도착 터미널을 넘기면 CellController가 "분류 실패"로 센다.
 //      * 터미널 적재 순서는 지훈님 CellController(c652e5b) 코드를 옮겨 온 것이다 (e8bacf5).
 //  ============================================================
@@ -111,7 +111,7 @@ public class LoadSequence : MonoBehaviour
     void Awake()
     {
         if (attacher == null)
-            { attacher = GetComponent<BoxAttacher>(); }
+        { attacher = GetComponent<BoxAttacher>(); }
     }
 
     // 꺼지면 감시와 로봇을 멈춘다.
@@ -151,11 +151,11 @@ public class LoadSequence : MonoBehaviour
         if (attacher != null && attacher.Busy)
         {
             if (EndLine != null && EndLine.CurrentBox != null)
-                { blockedLoads.Add(EndLine.CurrentBox); }
+            { blockedLoads.Add(EndLine.CurrentBox); }
             attacher.StopLoading();
         }
         if (loop != null)
-            { StopCoroutine(loop); }
+        { StopCoroutine(loop); }
 
         loop = null;
         status = attacher != null && attacher.Attached ? "흡착 유지 · 정지" : "정지";
@@ -169,13 +169,13 @@ public class LoadSequence : MonoBehaviour
         if (attacher == null || attacher.Busy || attacher.Attached) { return; }
 
         if (EndLine != null && EndLine.CurrentBox != null)
-            { blockedLoads.Remove(EndLine.CurrentBox); }
+        { blockedLoads.Remove(EndLine.CurrentBox); }
         IsHalted = false;
         status = "감시 중";
     }
 
     // 수거함을 비운다. 들어 있는 상자를 지운다 (집계는 이미 Finish()에서 끝났다).
-    /// [호출] 테스트 메뉴 (작업자 명령). 자동으로는 부르지 않는다.
+    /// [호출] 테스트 메뉴 (작업자 명령), LoadTerminalBox() (autoEmpty를 켰을 때만)
     /// [주의] 로봇이 일하는 중이거나 상자를 든 채면 비우지 않는다 (작업 중 삭제 금지).
     public void EmptyContainer()
     {
@@ -184,13 +184,9 @@ public class LoadSequence : MonoBehaviour
         int emptied = 0;
         foreach (var box in attacher.tote.Boxes)
             if (box != null)
-                { Destroy(box.gameObject); emptied++; }
+            { Destroy(box.gameObject); emptied++; }
         EmptiedCount += emptied;
         if (cell != null && emptied > 0) { cell.LogEvent("컨테이너 비움", "", $"{terminal} {emptied}개"); }
-
-        foreach (var box in attacher.tote.Boxes)
-            if (box != null)
-                { Destroy(box.gameObject); EmptiedCount++; }
     }
 
 
@@ -250,19 +246,19 @@ public class LoadSequence : MonoBehaviour
             AdvanceTerminalTransfers(lane);
             var loadingLine = TerminalEnd(lane);
             if (loadingLine == null)
-                { yield return null; continue; }
+            { yield return null; continue; }
 
             //  2) 새 상자가 서고, 로봇이 쉬고 있을 때까지 기다린다 (막힌 상자 · 이미 끝난 상자는 건너뛴다)
             var box = loadingLine.CurrentBox;
             if (box == null || blockedLoads.Contains(box) || box.IsFinished || !attacher.IsReady || attacher.Busy || attacher.Attached)
-                { yield return null; continue; }
+            { yield return null; continue; }
 
             //  3) 정지 위치가 로봇 범위 밖이면 임시 분기 정지점이다. 이송 경로가 이어질 때까지 적재 · 실패 처리를 하지 않는다
             if (Vector3.Distance(attacher.transform.position, loadingLine.StopPoint.position) > maxPickupDistance)
             {
                 box.state = BoxState.Transferring;
                 if (waitingTransfers.Add(box))
-                    { Debug.Log($"[Cell Transfer] {terminal} | {box.boxId} 이송 대기 | 최종 적재 지점 미연결: {loadingLine.name}. 로봇 앞 정지점까지 NextLine 경로를 연결하세요.", this); }
+                { Debug.Log($"[Cell Transfer] {terminal} | {box.boxId} 이송 대기 | 최종 적재 지점 미연결: {loadingLine.name}. 로봇 앞 정지점까지 NextLine 경로를 연결하세요.", this); }
                 yield return null;
                 continue;
             }
@@ -279,7 +275,7 @@ public class LoadSequence : MonoBehaviour
     // 상자 1개: 확인 → TryLoadBox() → 끝날 때까지 대기 → 결과 처리. 벨트 위에 그대로면 1번 더 시도한다.
     /// [종료] 들어갔으면 레인에서 빼고 Finish(). 못 넣었으면 BlockTerminal().
     /// 성공 여부는 BoxAttacher.PlacedBoxes에 들어갔는지로 본다. LastLoadSucceeded는 팔이 운반 높이로 돌아왔는지까지 포함한다.
-    /// [!] 수거함이 가득 차면 경고 후 비워질 때까지 여기서 기다리고, 끝나면 그냥 돌아간다. 같은 상자는 다음 루프에서 다시 집는다.
+    /// [!] 수거함이 가득 차면 경고 후 비워질 때까지 여기서 기다리고, 끝나면 그냥 돌아간다 (autoEmpty면 바로 비우고 돌아간다). 같은 상자는 다음 루프에서 다시 집는다.
     IEnumerator LoadTerminalBox(ConveyorLine loadingLine, BoxInfo box)
     {
         var loader = attacher;
@@ -290,26 +286,27 @@ public class LoadSequence : MonoBehaviour
         var collider = box.GetComponent<BoxCollider>();
         string error = null;
         if (box.IsMarked || box.destination == Destination.NG)
-            { error = "NG 상자가 일반 터미널에 도착했습니다."; }
+        { error = "NG 상자가 일반 터미널에 도착했습니다."; }
         else if (collider == null || collider.attachedRigidbody == null)
-            { error = "상자의 Collider/Rigidbody가 없습니다."; }
+        { error = "상자의 Collider/Rigidbody가 없습니다."; }
         else if (Vector3.Distance(loader.transform.position, collider.bounds.center) > maxPickupDistance)
-            { error = $"정지점이 로봇 집기 범위 밖입니다 ({Vector3.Distance(loader.transform.position, collider.bounds.center):F2}m). 터미널 이송 경로를 연결하세요."; }
-        //  자동 비우기: 비우고 돌아간다. 다음 루프에서 같은 상자를 집는다 (Destroy는 프레임 끝에 반영)
-        //if (autoEmpty)
-        //{
-        //    EmptyContainer();
-        //    yield return null;
-        //    yield break;
-        //}
+        { error = $"정지점이 로봇 집기 범위 밖입니다 ({Vector3.Distance(loader.transform.position, collider.bounds.center):F2}m). 터미널 이송 경로를 연결하세요."; }
         else if (loader.toto.Count >= loader.toto.Capacity)
         {
+            //  자동 비우기: 비우고 돌아간다. 다음 루프에서 같은 상자를 집는다 (Destroy는 프레임 끝에 반영)
+            if (autoEmpty)
+            {
+                EmptyContainer();
+                yield return null;
+                yield break;
+            }
+
             //  수거함이 비워지면 자동으로 다시 확인한다. 가득 참을 적재 실패로 반복 집계하지 않는다
             status = "수거함 가득 참 · 비우기 대기";
             blockedLoads.Add(box);
             Warn("수거함 가득 참 " + terminal, box.boxId);
             while (Running && !AlarmActive && loader.toto.Count >= loader.toto.Capacity)
-                { yield return null; }
+            { yield return null; }
             blockedLoads.Remove(box);
             yield break;
         }
@@ -332,35 +329,35 @@ public class LoadSequence : MonoBehaviour
             //  끝날 때까지 기다린다. 제한 시간을 넘으면 BoxAttacher를 멈춘다
             float started = Time.time;
             while (loader.Busy && !AlarmActive && Running && Time.time - started < loadTimeLimit)
-                { yield return null; }
+            { yield return null; }
             bool timedOut = loader.Busy && Time.time - started >= loadTimeLimit;
             if (loader.Busy)
-                { loader.StopLoading(); }
+            { loader.StopLoading(); }
 
             //  들어갔으면: 레인에서 빼고 집계한다. 놓기는 성공했지만 팔 복귀가 실패한 경우도 실물 적재는 한 번만 센다
             bool placed = false;
             foreach (var item in loader.PlacedBoxes)
                 if (item == collider)
-                    { placed = true; break; }
+                { placed = true; break; }
             if (placed)
             {
                 loadingLine.TakeAway(box);
                 LoadedCount++;
                 LastLoadSeconds = Time.time - loadStarted;
                 if (cell != null)
-                    { cell.Finish(box, terminal); }
+                { cell.Finish(box, terminal); }
                 status = "감시 중";
                 if (!loader.LastLoadSucceeded)
-                    { Warn("적재 후 팔 복귀 실패 " + terminal, box.boxId); }
+                { Warn("적재 후 팔 복귀 실패 " + terminal, box.boxId); }
                 yield break;
             }
             if (AlarmActive || !Running) { yield break; }
 
             //  못 넣었으면: 흡착 중이거나 상자가 정지 위치를 5 cm 넘게 벗어났으면 되돌리거나 다시 집지 않는다
             error = timedOut ? "적재 제한 시간 초과" : loader.Status;
-            if (loader.Attached || 
-                Vector3.Distance(collider.bounds.center, loadingLine.StopPoint.position + Vector3.up * collider.bounds.extents.y) > .05f) 
-                { break; }
+            if (loader.Attached ||
+                Vector3.Distance(collider.bounds.center, loadingLine.StopPoint.position + Vector3.up * collider.bounds.extents.y) > .05f)
+            { break; }
             if (attempt == 0)
             {
                 Debug.LogWarning($"[Cell Loading] {box.boxId} 적재 재시도 | {error}", this);
@@ -370,7 +367,7 @@ public class LoadSequence : MonoBehaviour
 
         //  3) 실패: 벨트 위 상자는 다시 kinematic으로 두고, 이 상자를 막는다
         if (!loader.Attached && body != null)
-            { body.isKinematic = true; }
+        { body.isKinematic = true; }
         BlockTerminal(box, error ?? "적재 실패");
     }
 
@@ -390,9 +387,9 @@ public class LoadSequence : MonoBehaviour
     void Warn(string type, string boxId)
     {
         if (cell != null)
-            { cell.RaiseAlarm(type, boxId); }
+        { cell.RaiseAlarm(type, boxId); }
         else
-            { Debug.LogWarning($"[Load] {terminal} | {boxId} | {type}", this); }
+        { Debug.LogWarning($"[Load] {terminal} | {boxId} | {type}", this); }
     }
 
 
