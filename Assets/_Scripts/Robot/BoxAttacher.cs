@@ -452,7 +452,8 @@ public sealed class BoxAttacher : MonoBehaviour
     IEnumerator Move(Vector3 point, Quaternion rotation)
     {
         Configure();
-        if (!armIK.MoveTo(point, rotation)) 
+        if (Attached && activeFaceDirection.StartsWith("X")) armIK.raisedElbowClearance = 0f;
+        if (!(Attached ? armIK.MoveSuctionTo(point, rotation) : armIK.MoveTo(point, rotation))) 
             { Status = "이동 실패 [" + Status + "] · " + armIK.Status + " goal=" + point + " target=" + targetBox.bounds.center; yield break; }
         while (armIK.Moving && !cancelled) { yield return null; }
         if (!Arrived) { Status = "이동 중단 · " + armIK.Status; }
@@ -700,7 +701,7 @@ public sealed class BoxAttacher : MonoBehaviour
                     bool rotationFound = false;
                     Quaternion canonical = tote.PlacementRotation(sign);
                     //  X: 180° 돌린 자세도 같은 5 × 6 바닥이라 후보에 넣는다 (손목을 덜 돌릴 수 있다)
-                    var desiredRotations = direction != "Y" ? new[] { canonical, Quaternion.AngleAxis(180f, tote.transform.up) * canonical } : new[] { canonical };
+                    var desiredRotations = direction == "X" ? new[] { Quaternion.AngleAxis(90f, tote.transform.up) * canonical, Quaternion.AngleAxis(-90f, tote.transform.up) * canonical, canonical, Quaternion.AngleAxis(180f, tote.transform.up) * canonical } : direction != "Y" ? new[] { canonical, Quaternion.AngleAxis(180f, tote.transform.up) * canonical } : new[] { canonical };
                     var liftOptions = direction != "Y" ? new[] { liftHeight, .12f, .08f }.Distinct().ToArray() : new[] { liftHeight };
                     //  회전 대기 위치 후보: 들어 올린 자리 기준 오프셋 (월드 m). 로봇 쪽 · 옆으로 옮겨 다른 손목 자세를 얻는다
                     Vector3 inward = Vector3.ProjectOnPlane(transform.position - box.bounds.center, Vector3.up).normalized;
@@ -713,6 +714,15 @@ public sealed class BoxAttacher : MonoBehaviour
                         -lateral * .12f + Vector3.up * .08f,
                         Vector3.up * .10f
                     };
+                    if (direction == "X")
+                        waypoints = new[] {
+                            inward * .18f + lateral * .18f + Vector3.up * .12f,
+                            inward * .18f - lateral * .18f + Vector3.up * .12f,
+                            inward * .22f + Vector3.up * .16f,
+                            -inward * .12f + lateral * .20f + Vector3.up * .12f,
+                            -inward * .12f - lateral * .20f + Vector3.up * .12f,
+                            Vector3.up * .22f
+                        }.Concat(waypoints).ToArray();
                     // Start with the verified wrist-up Z corridor. Every candidate
                     // still passes the same IK and complete-route checks below.
                     if (direction == "Z")
@@ -809,6 +819,7 @@ public sealed class BoxAttacher : MonoBehaviour
         if (!tote.TryNext(box, out int checkedIndex, out slotCentre, out reason) || checkedIndex != index)
             { Status = "적재 지지 재확인 실패 · " + reason; routine = null; yield break; }
 
+        if (direction == "X") armIK.raisedElbowClearance = 0f;
         //  9) 컨테이너 위로 운반 (운반 높이로 올린 뒤 칸 위로)
         Vector3 offset = tcp.position - box.bounds.center;
         Vector3 place = slotCentre + offset;

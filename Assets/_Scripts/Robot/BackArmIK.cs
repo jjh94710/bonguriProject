@@ -241,6 +241,29 @@ public sealed class BackArmIK : MonoBehaviour
         }
     }
 
+    // Held-parcel travel: adaptive Cartesian subdivision; precise endpoint retained.
+    public bool MoveSuctionTo(Vector3 position, Quaternion rotation)
+    {
+        if (!Application.isPlaying || Moving) return false;
+        model = new ArmKinematics(transform, tcp);
+        var current = model.CurrentAngles();
+        route.Clear();
+        protectBox = false;
+        if (!AppendSuctionTransit(ref current, position, rotation, true))
+        {
+            route.Clear();
+            current = model.CurrentAngles();
+            model.Forward(current, out var start, out _);
+            float elbowFloor = Mathf.Min(start.y, position.y) + raisedElbowClearance;
+            bool safe(float[] q) => (raisedElbowClearance <= 0 || model.HasRaisedElbow(q, elbowFloor)) && model.WristAbovePlane(q, minimumWristPlane);
+            if (!model.Solve(position, rotation, current, out var answer, out _, out _, 1.5f, safe, .0015f))
+            { status = "흡착 운반 목표 자세 불가 · " + pathFailure; return false; }
+            if (!AppendJointEdge(current, answer, false) || route.Any(q => !safe(q)))
+            { route.Clear(); status = "흡착 운반 관절 경로 높이 부족"; return false; }
+        }
+        BeginRoute(position, rotation);
+        return true;
+    }
     // 목표 위치 · 회전의 관절각을 먼저 구하고, 지금 관절각에서 그 관절각까지 고르게 바꿔 간다 (손끝 경로는 곡선).
     /// [호출] BoxAttacher.LoadSeqRoutine() (윗면 흡착 접근, 예전 단순 경로)
     /// obstacle을 주면 그 상자와 겹치지 않는 자세 · 경로만 쓰고, 이동 중에도 상자를 보호한다.
@@ -676,10 +699,10 @@ public sealed class BackArmIK : MonoBehaviour
 
             if (!model.Solve(Vector3.Lerp(startPosition, endPosition, progress), Quaternion.Slerp(startRotation, endRotation, progress), seed,
                     out var next, out float error, out float angle,
-                    // Z held-transit samples use the same 2-degree orientation
+                    // X/Z held-transit samples use the same 2-degree orientation
                     // tolerance as drive arrival. Contact and final placement
                     // endpoints retain 1.5 degrees and their original position limits.
-                    precisePlacement ? (transitTolerance > 0 && targetBox != null && Mathf.Abs(targetBox.transform.forward.z) > .9f &&
+                    precisePlacement ? (transitTolerance > 0 && 
                         (step < steps || transitTolerance > .0015f) ? 2f : 1.5f) : 5f,
                     continuous,
                     transitTolerance > 0 ? (step == steps ? transitTolerance : .003f) : (precisePlacement ? .0015f : positionTolerance)))
