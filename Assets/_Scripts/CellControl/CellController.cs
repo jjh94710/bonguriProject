@@ -500,10 +500,11 @@ public class CellController : MonoBehaviour
             while (IsRunning && !readLine.CanAccept) { yield return null; }
             if (!IsRunning) { yield break; }
 
-            box.state = BoxState.Transferring;
-            LastStationSeconds = Time.time - box.correctArriveTime;
-            stationBox = null;
-            correctLine.Release();
+            if (TryReleaseCorrectionBox(box))
+            {
+                LastStationSeconds = Time.time - box.correctArriveTime;
+                stationBox = null;
+            }
         }
     }
 
@@ -513,6 +514,18 @@ public class CellController : MonoBehaviour
     /// [!] 카메라가 없어 측정하지 못하거나 판정이 judgeTimeLimit을 넘으면 JudgeFail로 표시하고 바로 끝낸다.
     ///     교정 로봇이 실패해도 바로 끝낸다 (CorrectionFail 표시는 CorrectAt()이 한다).
     /// 측정 방식은 상자의 제어 방식(box.mode)을 따른다. 학습 정책이면 ONNX, 기본 제어면 색 비율.
+    // A time limit applies to the parcel captured on arrival, never to the queue.
+    BoxInfo lastReleasedCorrectionBox;
+    bool TryReleaseCorrectionBox(BoxInfo box)
+    {
+        if (box == null || correctLine == null || readLine == null || !readLine.CanAccept ||
+            correctLine.CurrentBox != box || lastReleasedCorrectionBox == box) return false;
+        box.state = BoxState.Transferring;
+        lastReleasedCorrectionBox = box;
+        correctLine.Release();
+        return true;
+    }
+
     IEnumerator JudgeAndCorrect(BoxInfo box)
     {
         while (true)

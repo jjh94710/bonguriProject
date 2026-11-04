@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -143,6 +143,8 @@ public class ConveyorLine : MonoBehaviour
     //  ============================================================
     /// 정지 위치에 멈춰 있는 상자 (없으면 null)
     public BoxInfo CurrentBox { get; private set; }
+    public BoxInfo LastArrivedBox { get; private set; }
+    public event System.Action<BoxInfo> BoxArrived;
     public Transform StopPoint => stopPoint;
     public ConveyorLine NextLine => nextLine;
 
@@ -499,6 +501,7 @@ public class ConveyorLine : MonoBehaviour
     void Arrive(BoxInfo box)
     {
         CurrentBox = box;
+        LastArrivedBox = box;
         arriveTime = Time.time;
 
         Vector3 error = PositionOf(box) - stopPoint.position;
@@ -512,6 +515,7 @@ public class ConveyorLine : MonoBehaviour
         { Debug.LogWarning($"[Conveyor] {lineName}: {box.boxId} 정지 오차 {LastStopError * 1000f:F0}mm (허용 {stopTolerance * 1000f:F0}mm 초과)", this); }
         else
         { Debug.Log($"[Conveyor] {lineName}: {box.boxId} 정지 위치 도착 (오차 {LastStopError * 1000f:F1} mm)", this); }
+        BoxArrived?.Invoke(box);
     }
 
     //  이 상자가 아직 지나지 않은 다음 푸셔 (index부터, 빈 칸 · 분기 지점이 없는 칸은 건너뛴다). 없으면 null.

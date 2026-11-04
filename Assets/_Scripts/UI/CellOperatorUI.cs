@@ -37,9 +37,9 @@ public sealed class CellOperatorUI : MonoBehaviour
         bool running=ready&&controller.IsRunning;
         if(successText!=null)successText.text=connected?controller.Success.ToString("N0")+"개":"—";
         if(failText!=null)failText.text=connected?controller.Fail.ToString("N0")+"개":"—";
-        if(waitText!=null)waitText.text="미구현";
+        if(waitText!=null)waitText.text=connected?Mathf.Max(0,controller.StationWaitSeconds).ToString("0.0")+"초":"—";
         if(alarmText!=null){alarmText.text=connected?(controller.IsAlarmActive?"알람 정지":"정상"):"미연결";alarmText.color=connected&&controller.IsAlarmActive?new Color(1,.48f,.4f):new Color(.6f,.9f,.75f);}
-        if(logPathText!=null)logPathText.text="미연결 · ProductionLog 없음";
+        if(logPathText!=null)logPathText.text=controller==null||controller.Log==null?"로그 미연결":string.IsNullOrEmpty(controller.Log.BoxFilePath)?"CSV · 기록 대기":controller.Log.BoxFilePath;
         if(resetAlarmButton!=null)resetAlarmButton.interactable=Application.isPlaying&&connected&&controller.IsAlarmActive;
         if(statusText!=null){statusText.text=!connected?"공정 미연결":!Application.isPlaying?"운전 준비":running?"가동 중":"정지";statusText.color=running?new Color(.45f,.9f,.7f):new Color(.75f,.8f,.86f);}
         float interval=ready?controller.Settings.feedInterval:previewInterval;

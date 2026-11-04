@@ -21,7 +21,26 @@ public sealed class BoxInfoPanel : MonoBehaviour
     static readonly Color Good = new Color(.35f,.88f,.68f);
     static readonly Color Attention = new Color(1f,.76f,.32f);
     static readonly Color Error = new Color(1f,.4f,.4f);
-    void OnEnable(){ Refresh(); }
+    ConveyorLine subscribedLine;
+    void OnEnable()
+    {
+        if (Application.isPlaying && correctionLine != null)
+        {
+            subscribedLine = correctionLine;
+            subscribedLine.BoxArrived += OnBoxArrived;
+        }
+        Refresh();
+    }
+    void OnDisable()
+    {
+        if (subscribedLine != null) subscribedLine.BoxArrived -= OnBoxArrived;
+        subscribedLine = null;
+    }
+    void OnBoxArrived(BoxInfo box)
+    {
+        trackedBox = box;
+        Refresh();
+    }
     void Update(){ if(!Application.isPlaying || Time.unscaledTime < nextRefresh)return; nextRefresh=Time.unscaledTime+refreshInterval;Refresh(); }
     public void Refresh()
     {
@@ -49,7 +68,7 @@ public sealed class BoxInfoPanel : MonoBehaviour
     {
         if (correctionLine == null) return previewBox;
         if (!Application.isPlaying) return correctionLine.CurrentBox;
-        var current = correctionLine.CurrentBox;
+        var current = correctionLine.CurrentBox != null ? correctionLine.CurrentBox : correctionLine.LastArrivedBox;
         // Switch at the reading stop, regardless of the previous parcel's completion.
         // Keep its BoxInfo while the station is empty, so recognition can update live.
         if (current != null) trackedBox = current;
