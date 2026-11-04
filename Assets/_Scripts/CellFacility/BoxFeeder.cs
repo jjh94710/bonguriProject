@@ -35,6 +35,7 @@ public class BoxFeeder : MonoBehaviour
 
     [Tooltip("투입할 상자 Prefab (ParcelBox_6x8x12cm_Process)")]
     [SerializeField] BoxInfo boxPrefab;
+    public BoxInfo ParcelPrefab => boxPrefab;
 
     [Tooltip("송장 배치 에셋 (LabelLayout). 송장 번호 · 지역을 칸 위치대로 찍는다")]
     [SerializeField] LabelLayout layout;

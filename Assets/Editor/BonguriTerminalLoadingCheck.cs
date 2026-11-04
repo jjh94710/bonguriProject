@@ -25,6 +25,9 @@ public static class BonguriTerminalLoadingCheck
     static bool routeOnly;
     static float nextSample;
     static readonly List<string> trajectory = new List<string>();
+    static Vector3? previousBPosition;
+    static float maximumBReverseStep;
+    static int bDirectionSamples;
     static BonguriTerminalLoadingCheck()
     {
         if (SessionState.GetBool(Key, false)) EditorApplication.update += Tick;
@@ -63,6 +66,7 @@ public static class BonguriTerminalLoadingCheck
                 started = true; began = EditorApplication.timeSinceStartup; blocked.Clear(); events.Clear();
                 reservationChecking=false;reservationPassed=false;
                 routeOnly=SessionState.GetBool(Key+".Route",false);nextSample=0;trajectory.Clear();
+                previousBPosition=null;maximumBReverseStep=0;bDirectionSamples=0;
                 trajectory.Add("time,id,state,destination,x,y,z");
                 cell = UnityEngine.Object.FindFirstObjectByType<CellController>();
                 feeder = UnityEngine.Object.FindFirstObjectByType<BoxFeeder>();
@@ -76,7 +80,7 @@ public static class BonguriTerminalLoadingCheck
                 if(routeOnly)
                 {
                     // Isolate conveyor arrival from pickup. Play exit restores these scene-only overrides.
-                    var edit=new SerializedObject(cell);edit.FindProperty("terminalStations").arraySize=0;edit.ApplyModifiedPropertiesWithoutUndo();
+                    var edit=new SerializedObject(cell);edit.FindProperty("loadSequences").arraySize=0;edit.ApplyModifiedPropertiesWithoutUndo();
                     foreach(var line in UnityEngine.Object.FindObjectsByType<ConveyorLine>(FindObjectsSortMode.None).Where(l=>l.UsesSurfacePath))
                     {var lane=new SerializedObject(line);lane.FindProperty("speed").floatValue=1;lane.ApplyModifiedPropertiesWithoutUndo();}
                 }
@@ -94,6 +98,21 @@ public static class BonguriTerminalLoadingCheck
             if(routeOnly)
             {
                 var terminalLines=UnityEngine.Object.FindObjectsByType<ConveyorLine>(FindObjectsSortMode.None).Where(l=>l.name=="TerminalA"||l.name=="TerminalB"||l.name=="TerminalC").ToArray();
+                var bLine=terminalLines.FirstOrDefault(l=>l.name=="TerminalB");
+                if(bLine!=null && bLine.QueueCount>0)
+                {
+                    var b=UnityEngine.Object.FindObjectsByType<BoxInfo>(FindObjectsSortMode.None).FirstOrDefault(box=>box.destination==Destination.B);
+                    if(b!=null)
+                    {
+                        var p=ConveyorLine.PositionOf(b);
+                        var edit=new SerializedObject(bLine);var entry=(Transform)edit.FindProperty("entry").objectReferenceValue;
+                        var direction=Vector3.ProjectOnPlane(bLine.StopPoint.position-entry.position,Vector3.up).normalized;
+                        if(previousBPosition.HasValue)
+                        {maximumBReverseStep=Mathf.Max(maximumBReverseStep,-Vector3.Dot(p-previousBPosition.Value,direction));bDirectionSamples++;}
+                        previousBPosition=p;
+                        if(maximumBReverseStep>.001f){Finish("B parcel reversed after conveyor handoff.");return;}
+                    }
+                }
                 if(terminalLines.Length==3 && terminalLines.All(l=>l.HasBoxAtStop)){Finish(null);return;}
                 if(EditorApplication.timeSinceStartup-began>90){Finish("Conveyor route check timed out.");return;}
                 return;
@@ -158,7 +177,7 @@ public static class BonguriTerminalLoadingCheck
                     robot=loader.name,robotPosition=loader.transform.position,distanceToRobot=l.CurrentBox==null?-1:Vector3.Distance(l.CurrentBox.transform.position,loader.transform.position)};
             }).ToArray();
             Directory.CreateDirectory("results/conveyor_route_check");
-            File.WriteAllText("results/conveyor_route_check/latest.json",JsonUtility.ToJson(new RouteReport {passed=error==null&&routes.Length==3&&routes.All(r=>r.box!="None"),fed=feeder.FedCount,processed=cell.Processed,error=error??"",routes=routes},true));
+            File.WriteAllText("results/conveyor_route_check/latest.json",JsonUtility.ToJson(new RouteReport {passed=error==null&&routes.Length==3&&routes.All(r=>r.box!="None")&&bDirectionSamples>0&&maximumBReverseStep<=.001f,bDirectionSamples=bDirectionSamples,maximumBReverseStep=maximumBReverseStep,fed=feeder.FedCount,processed=cell.Processed,error=error??"",routes=routes},true));
             File.WriteAllLines("results/conveyor_route_check/trajectory.csv",trajectory);
             File.WriteAllLines("results/conveyor_route_check/events.log",events);
             RestoreSettings();
@@ -177,12 +196,115 @@ public static class BonguriTerminalLoadingCheck
     }
     static void RestoreSettings()
     {if(cell!=null && cell.Settings!=null){var s=cell.Settings;s.faceTop=top;s.faceSide=side;s.faceBottom=bottom;s.feedInterval=interval;}}
-    [Serializable] class RouteReport { public bool passed;public int fed,processed;public string error;public Route[] routes; }
+    [Serializable] class RouteReport { public bool passed;public int fed,processed,bDirectionSamples;public float maximumBReverseStep;public string error;public Route[] routes; }
     [Serializable] class Route {public string line,nextLine,box,robot;public Vector3 entry,exit,stop,boxPosition,robotPosition;public float distanceToRobot;}
     [Serializable] class Report
     {
         public bool passed,configurationPassed,transferWaitPassed,stopReservationPassed,physicalLoadingPassed;
         public int fed,processed;
         public string error,detail;
+    }
+}
+
+// Records actual suction and lift separately from the overall placement result.
+[InitializeOnLoad]
+public static class BonguriPickupCheck
+{
+    const string Key="Bonguri.PickupCheck";
+    static CellController cell;
+    static BoxAttacher[] loaders;
+    static Item[] items;
+    static double began,nextRecord;
+    static bool started,oldBackground;
+    static readonly List<string> events=new List<string>();
+    static readonly HashSet<BoxInfo> oriented=new HashSet<BoxInfo>();
+    [Serializable] sealed class Item
+    {
+        public string robot,box,status,ikStatus;
+        public bool attempted,attached,lifted,placed,busy;
+        public float initialBottom,maxLift;
+    }
+    [Serializable] sealed class Report{public bool complete;public string error;public int processed;public Item[] robots;}
+    static BonguriPickupCheck(){EditorApplication.update+=Tick;}
+    [MenuItem("Tools/Bonguri/Integration/Verify Actual Suction Pickup")]
+    public static void Run() => Run(false);
+    public static void Run(bool uniformX)
+    {
+        if(EditorApplication.isPlayingOrWillChangePlaymode)return;
+        SessionState.SetBool("Bonguri.TerminalLoadingCheck",false);
+        SessionState.SetBool(Key+".UniformX",uniformX);
+        SessionState.SetBool(Key+".DirectZ",false);
+        SessionState.SetBool(Key,true);started=false;EditorApplication.isPlaying=true;
+    }
+    public static void RunDirectZ(bool all=false){Run(false);SessionState.SetBool(Key+".DirectZ",true);SessionState.SetBool(Key+".AllRobots",all);}
+    static void Log(string message,string stack,LogType type)
+    {if(message.StartsWith("[Cell")||message.StartsWith("[Conveyor")||message.StartsWith("[Pusher")||message.StartsWith("[Pickup Path]"))events.Add(Time.time.ToString("F3")+" "+message);}
+    static void Write(bool complete,string error)
+    {
+        Directory.CreateDirectory("results/pickup_check");
+        File.WriteAllText("results/pickup_check/latest.json",JsonUtility.ToJson(new Report{complete=complete,error=error??"",processed=cell==null?0:cell.Processed,robots=items},true));
+        File.WriteAllLines("results/pickup_check/events.log",events);
+    }
+    static void Tick()
+    {
+        if(!SessionState.GetBool(Key,false)||!EditorApplication.isPlaying||Time.time<2)return;
+        try
+        {
+            if(!started)
+            {
+                oldBackground=Application.runInBackground;Application.runInBackground=true;
+                started=true;began=EditorApplication.timeSinceStartup;nextRecord=0;events.Clear();oriented.Clear();Application.logMessageReceived+=Log;
+                cell=UnityEngine.Object.FindFirstObjectByType<CellController>();
+                if(!cell.ValidateTerminalConfiguration(out string error))throw new Exception(error);
+                loaders=UnityEngine.Object.FindObjectsByType<BoxAttacher>(FindObjectsSortMode.None).Where(l=>l.name=="fr5_suctionA"||l.name=="fr5_suctionB"||l.name=="fr5_suctionC").OrderBy(l=>l.name).ToArray();
+                if(loaders.Length!=3)throw new Exception("Expected three loading robots.");
+                if(SessionState.GetBool(Key+".DirectZ",false)&&!SessionState.GetBool(Key+".AllRobots",false))loaders=loaders.Where(l=>l.name=="fr5_suctionC").ToArray();
+                items=loaders.Select(l=>new Item{robot=l.name}).ToArray();
+                var s=cell.Settings;s.faceTop=1;s.faceSide=0;s.faceBottom=0;s.feedInterval=3;
+                foreach(var line in UnityEngine.Object.FindObjectsByType<ConveyorLine>(FindObjectsSortMode.None).Where(l=>l.UsesSurfacePath))
+                {var edit=new SerializedObject(line);edit.FindProperty("speed").floatValue=1;edit.ApplyModifiedPropertiesWithoutUndo();}
+                UnityEngine.Random.InitState(20261103);
+                if(SessionState.GetBool(Key+".DirectZ",false))
+                {
+                    foreach(var loader in loaders)
+                    {
+                        var line=UnityEngine.Object.FindObjectsByType<ConveyorLine>(FindObjectsSortMode.None).Single(l=>l.name=="Terminal"+loader.name.Last());
+                        var box=UnityEngine.Object.Instantiate(UnityEngine.Object.FindFirstObjectByType<BoxFeeder>().ParcelPrefab,new Vector3(100,100,100),Quaternion.identity);
+                        var body=box.GetComponent<Rigidbody>();body.isKinematic=true;
+                        if(!line.ValidateSurfacePath(out string why)||!line.TryGetSurfacePose(box,Quaternion.identity,line.PathLength,out var p,out var r,out why))throw new Exception(why);
+                        box.boxId="DIRECT-Z-"+loader.name.Last();box.name=box.boxId;body.position=p;body.rotation=r;box.transform.SetPositionAndRotation(p,r);Physics.SyncTransforms();
+                        if(!loader.TryLoadBox(box.GetComponent<BoxCollider>(),out why))throw new Exception(why);
+                    }
+                }
+                else cell.Run(3);
+            }
+            EditorApplication.QueuePlayerLoopUpdate();
+            // Controlled comparison only: every newly fed parcel has its suction face along X.
+            if(SessionState.GetBool(Key+".UniformX",false))
+                foreach(var box in UnityEngine.Object.FindObjectsByType<BoxInfo>(FindObjectsSortMode.None).Where(b=>!string.IsNullOrEmpty(b.boxId)))
+                    if(oriented.Add(box))
+                    {var rotation=Quaternion.Euler(0,90,0);var body=box.GetComponent<Rigidbody>();if(body!=null)body.rotation=rotation;box.transform.rotation=rotation;}
+            for(int i=0;i<loaders.Length;i++)
+            {
+                var loader=loaders[i];var item=items[i];item.status=loader.Status;item.ikStatus=loader.armIK.Status;item.busy=loader.Busy;
+                var box=loader.targetBox;if(box==null)continue;
+                item.box=box.name;
+                if(!item.attempted)item.initialBottom=box.bounds.min.y;
+                item.attempted=true;
+                item.attached|=loader.Attached;
+                if(loader.Attached){item.maxLift=Mathf.Max(item.maxLift,box.bounds.min.y-item.initialBottom);item.lifted|=item.maxLift>.05f;}
+                item.placed=loader.PlacedBoxes.Contains(box);
+            }
+            bool settled=SessionState.GetBool(Key+".DirectZ",false)||loaders.All(l=>l.targetBox==null||l.PlacedBoxes.Contains(l.targetBox)||l.targetBox.GetComponent<BoxInfo>().state!=BoxState.Loading);
+            bool done=settled&&items.All(i=>i.attempted&&!i.busy)&&(SessionState.GetBool(Key+".DirectZ",false)||cell.Processed>=items.Count(i=>i.placed));
+            bool timeout=EditorApplication.timeSinceStartup-began>600;
+            if(done||timeout)
+            {
+                Write(true,timeout?"Pickup check timed out.":null);SessionState.SetBool(Key,false);Application.logMessageReceived-=Log;
+                Application.runInBackground=oldBackground;EditorApplication.isPlaying=false;return;
+            }
+            if(EditorApplication.timeSinceStartup>=nextRecord){Write(false,null);nextRecord=EditorApplication.timeSinceStartup+1;}
+        }
+        catch(Exception e){Write(true,e.ToString());SessionState.SetBool(Key,false);Application.logMessageReceived-=Log;Application.runInBackground=oldBackground;EditorApplication.isPlaying=false;}
     }
 }

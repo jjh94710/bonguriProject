@@ -70,7 +70,9 @@ public static class BonguriConveyorSurfaceSetup
         for(int i=firstStraight;i<surfaces.Length;i++)
         {
             if(!(surfaces[i] is BoxCollider))continue;
-            Span(raw,End(surfaces[i],true));
+            // B joins inside its first straight belt. Visiting that belt's upstream
+            // edge first sends a parcel backwards before it starts downstream.
+            if(!(terminal=="B" && i==firstStraight))Span(raw,End(surfaces[i],true));
             Vector3 end=End(surfaces[i],false);
             if(i==surfaces.Length-1)end+=surfaces[i].transform.forward*.18f;
             Span(raw,end);
@@ -128,5 +130,30 @@ public static class BonguriConveyorSurfaceSetup
         }
         Undo.CollapseUndoOperations(group);EditorSceneManager.MarkSceneDirty(scene);EditorSceneManager.SaveScene(scene);
         File.WriteAllText("Temp/ConveyorSurfaceRoutes.txt",report.ToString());Debug.Log("[Surface Routes] "+report);
+    }
+
+    [MenuItem("Tools/Bonguri/Integration/Repair B Route Entry")]
+    public static void RepairBEntry()
+    {
+        if(EditorApplication.isPlayingOrWillChangePlaymode)throw new InvalidOperationException("Stop Play first.");
+        var scene=SceneManager.GetActiveScene();
+        if(scene.path!="Assets/Scenes/bongyuri.unity")throw new InvalidOperationException("Open bongyuri first.");
+        Physics.SyncTransforms();var plan=Plan("B",Surfaces());
+        var root=plan.line.transform.Find("SurfaceRoute");
+        if(root==null)throw new InvalidOperationException("B SurfaceRoute is missing.");
+        Directory.CreateDirectory("Temp/BonguriIntegrationBackup");
+        if(!EditorSceneManager.SaveScene(scene,"Temp/BonguriIntegrationBackup/before_B_entry_repair_"+DateTime.Now.ToString("yyyyMMdd_HHmmss")+".unity",true))throw new IOException("Backup failed.");
+        Undo.IncrementCurrentGroup();int group=Undo.GetCurrentGroup();Undo.SetCurrentGroupName("Repair B route entry");
+        Undo.RecordObject(plan.line,"Repair B route entry");
+        foreach(Transform child in root.Cast<Transform>().ToArray())Undo.DestroyObjectImmediate(child.gameObject);
+        var edit=new SerializedObject(plan.line);var points=edit.FindProperty("surfaceWaypoints");points.arraySize=plan.points.Length-2;
+        for(int i=1;i<plan.points.Length-1;i++)
+        {
+            var t=new GameObject("Surface_"+i.ToString("D3")).transform;t.SetParent(root,false);t.position=plan.points[i];
+            Undo.RegisterCreatedObjectUndo(t.gameObject,"Create corrected B waypoint");points.GetArrayElementAtIndex(i-1).objectReferenceValue=t;
+        }
+        edit.ApplyModifiedProperties();EditorUtility.SetDirty(plan.line);Undo.CollapseUndoOperations(group);
+        EditorSceneManager.MarkSceneDirty(scene);EditorSceneManager.SaveScene(scene);
+        Debug.Log("[Surface Routes] B entry repaired: downstream only, "+plan.points.Length+" points.");
     }
 }

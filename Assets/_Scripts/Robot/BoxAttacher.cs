@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,7 +13,7 @@ using UnityEngine.Serialization;
 //      - 로봇 이동은 모두 BackArmIK가 한다. 이 스크립트는 목표 위치 · 자세, 순서, 성공 · 실패 판단을 맡는다.
 //
 //  [적재 경로] 상자의 5 × 6 면(로컬 ±Z)이 월드 어느 축을 보는지로 경로가 나뉜다 (자동 판별).
-//      Z       기존 경로: 면에 다가가 흡착 → 위로 들기 → 그 자리에서 5 × 6 면을 위로 돌리기
+//      Z       손목 위쪽 해를 탐색하고 사전 검증된 접근 · 상승 · 이동 · 분할 회전 경로로 적재한다
 //      X · Y   사전 확인 경로: 접근 · 들기 · 회전 대기 위치 이동 · 나눠 돌리기 경로를 모두 미리 계산해 본 뒤 시작한다
 //              (X Direction · Y Direction 칸의 값을 쓴다)
 //  [사용] fr5_suction 루트에 붙인다 (BackArmIK는 자동으로 같이 붙는다). 칸은 봉현님 도구 Tools/Bonguri/Configure Suction Loading이 맞춘다.
@@ -64,7 +64,7 @@ public sealed class BoxAttacher : MonoBehaviour
     public float[] readyAngles;
 
     //  ---------------- 방향별 경로 ----------------
-    // 5 × 6 면이 월드 X 또는 Y를 볼 때 쓰는 경로 값 (Z는 아래 Clearance로 기존 경로).
+    // 5 × 6 면이 보는 월드 축별 접근 · 상승 · 회전 경로 값.
     [Serializable]
     public sealed class DirectionSettings
     {
@@ -96,8 +96,12 @@ public sealed class BoxAttacher : MonoBehaviour
     public DirectionSettings yDirection = new DirectionSettings { 
         standOff = .12f, approachAbove = .08f, liftHeight = .12f, rotationRise = .02f };
 
+    [Tooltip("Z 방향도 접근·상승·이동·분할 회전 경로를 미리 검증한다")]
+    public DirectionSettings zDirection = new DirectionSettings {
+        standOff = .16f, approachAbove = .12f, liftHeight = .16f, rotationRise = .025f };
+
     [Tooltip("마지막 상자의 5 × 6 면 방향과 고른 경로 (확인용)")]
-    [SerializeField] string activeFaceDirection = "자동 판별 · Z는 기존 경로";
+    [SerializeField] string activeFaceDirection = "자동 판별 · 접근·상승·회전 사전 확인";
 
     //  ---------------- 이동 ----------------
     [Header("이동")]
@@ -639,24 +643,26 @@ public sealed class BoxAttacher : MonoBehaviour
             if (belt != null) { belt.Stop(); }
         }
 
-        //  3) 5 × 6 면(로컬 Z)이 보는 월드 축을 판별하고 경로 값을 고른다 (Z = 기존 경로, X · Y = 방향별 경로)
+        //  3) 5 × 6 면(로컬 Z)이 보는 월드 축을 판별하고 경로 값을 고른다 (X · Y · Z 방향별 사전 검증 경로)
         Vector3 cupAxis = tcp.InverseTransformDirection((tcp.position - suctionCup.position).normalized);
         Vector3 faceAxis = box.transform.forward.normalized;
         Vector3 absolute = new Vector3(Mathf.Abs(faceAxis.x), Mathf.Abs(faceAxis.y), Mathf.Abs(faceAxis.z));
         string direction = absolute.y >= absolute.x && absolute.y >= absolute.z ? "Y" : absolute.x > absolute.z ? "X" : "Z";
-        bool originalZ = direction == "Z";
-        DirectionSettings settings = originalZ ? null : direction == "X" ? xDirection : yDirection;
-        if (!originalZ && settings == null) 
+        // A single Cartesian turn can leave the safe wrist branch found for Z contact.
+        DirectionSettings settings = direction == "X" ? xDirection : direction == "Y" ? yDirection : zDirection;
+        if (settings == null)
             { Status = direction + " 방향 설정이 없습니다."; routine = null; yield break; }
-        activeFaceDirection = direction + " 방향 · " + (originalZ ? "기존 경로" : "접근·상승·회전 사전 확인");
-        float approachDistance = originalZ ? clearance : Mathf.Max(.03f, settings.standOff);
-        float approachAbove = originalZ ? .12f : Mathf.Max(0f, settings.approachAbove);
-        float liftHeight = originalZ ? clearance : Mathf.Max(.05f, settings.liftHeight);
-        float[] rollCandidates = originalZ ? new[] { 0f, 90f, -90f, 180f } : settings.wristRolls;
+        activeFaceDirection = direction + " 방향 · " + "접근·상승·회전 사전 확인";
+        float approachDistance = Mathf.Max(.03f, settings.standOff);
+        float approachAbove = Mathf.Max(0f, settings.approachAbove);
+        float liftHeight = Mathf.Max(.05f, settings.liftHeight);
+        float[] rollCandidates = settings.wristRolls;
         if (rollCandidates == null || rollCandidates.Length == 0) 
             { rollCandidates = new[] { 0f, 90f, -90f, 180f }; }
         if (direction == "X")
             { rollCandidates = new[] { 0f, 90f, -90f, 180f, 45f, -45f, 135f, -135f }.Concat(rollCandidates).Distinct().ToArray(); }
+        else if (direction == "Z")
+            { rollCandidates = new[] { 180f, 0f, 90f, -90f, 45f, -45f, 135f, -135f }.Concat(rollCandidates).Distinct().ToArray(); }
         string rejectedPath = "", rejectedApproach = "", rejectedRotation = "";
         int validApproaches = 0, rotationAttempts = 0;
         Quaternion selectedBoxRotation = Quaternion.identity;
@@ -668,8 +674,6 @@ public sealed class BoxAttacher : MonoBehaviour
             Vector3 normal = box.transform.forward * sign;
             return Vector3.Dot(normal, Vector3.up) * 2 + Vector3.Dot(normal, (transform.position - box.bounds.center).normalized);
         }
-        float selectedSign = 1;
-        Quaternion contactRotation = tcp.rotation;
         bool found = false;
         foreach (float sign in new[] { 1f, -1f }.OrderByDescending(score))
         {
@@ -679,7 +683,7 @@ public sealed class BoxAttacher : MonoBehaviour
             var aligned = Quaternion.FromToRotation(referenceToolRotation * cupAxis, -normal) * referenceToolRotation;
             foreach (float roll in rollCandidates)
             {
-                //  4-1) 접근 경로: 면 위쪽 → 면 바깥 대기 자리 → 접촉 (X · Y는 계산만 해 둔다)
+                //  4-1) 접근 경로: 면 위쪽 → 면 바깥 대기 자리 → 접촉 (모든 방향은 계산만 해 둔다)
                 var rotation = Quaternion.AngleAxis(roll, normal) * aligned;
                 Status = direction + " 방향 · 접근/회전 경로 계산";
                 Configure();
@@ -687,18 +691,17 @@ public sealed class BoxAttacher : MonoBehaviour
                 if (!armIK.PlanSuctionApproach(point + 
                                                normal * approachDistance + 
                                                Vector3.up * approachAbove, point + 
-                                               normal * approachDistance, contact, rotation, box, preview: !originalZ))
+                                               normal * approachDistance, contact, rotation, box, preview: true))
                     { rejectedPath = rejectedApproach = armIK.Status; continue; }
                 validApproaches++;
 
-                //  4-2) X · Y: 흡착 뒤 들기 → 회전 대기 위치 → 나눠 돌리기 경로를 미리 계산해, 되는 조합이 있을 때만 이 접근을 쓴다
-                if (!originalZ)
+                //  4-2) X · Y · Z: 흡착 뒤 들기 → 회전 대기 위치 → 나눠 돌리기 경로를 미리 계산해, 되는 조합이 있을 때만 이 접근을 쓴다
                 {
                     bool rotationFound = false;
                     Quaternion canonical = tote.PlacementRotation(sign);
                     //  X: 180° 돌린 자세도 같은 5 × 6 바닥이라 후보에 넣는다 (손목을 덜 돌릴 수 있다)
-                    var desiredRotations = direction == "X" ? new[] { canonical, Quaternion.AngleAxis(180f, tote.transform.up) * canonical } : new[] { canonical };
-                    var liftOptions = direction == "X" ? new[] { liftHeight, .12f, .08f }.Distinct().ToArray() : new[] { liftHeight };
+                    var desiredRotations = direction != "Y" ? new[] { canonical, Quaternion.AngleAxis(180f, tote.transform.up) * canonical } : new[] { canonical };
+                    var liftOptions = direction != "Y" ? new[] { liftHeight, .12f, .08f }.Distinct().ToArray() : new[] { liftHeight };
                     //  회전 대기 위치 후보: 들어 올린 자리 기준 오프셋 (월드 m). 로봇 쪽 · 옆으로 옮겨 다른 손목 자세를 얻는다
                     Vector3 inward = Vector3.ProjectOnPlane(transform.position - box.bounds.center, Vector3.up).normalized;
                     Vector3 lateral = Vector3.Cross(Vector3.up, inward);
@@ -710,7 +713,11 @@ public sealed class BoxAttacher : MonoBehaviour
                         -lateral * .12f + Vector3.up * .08f,
                         Vector3.up * .10f
                     };
-                    var riseOptions = direction == "X" ? 
+                    // Start with the verified wrist-up Z corridor. Every candidate
+                    // still passes the same IK and complete-route checks below.
+                    if (direction == "Z")
+                        waypoints = new[] { waypoints[2], waypoints[0], waypoints[1], waypoints[3], waypoints[4], waypoints[5] };
+                    var riseOptions = direction != "Y" ?
                         new[] { settings.rotationRise, 0f }.Distinct().ToArray() : new[] { settings.rotationRise };
                     foreach (var desired in desiredRotations)
                     {
@@ -723,7 +730,7 @@ public sealed class BoxAttacher : MonoBehaviour
                                     rotationAttempts++;
                                     Status = direction + " 방향 · 회전 대기 위치 후보 " + rotationAttempts + " 계산";
                                     if (armIK.PreviewSuctionRotation(box, desired, lift, rise, Mathf.Min(settings.rotationStepDegrees, 10f), waypoint))
-                                        { selectedBoxRotation = desired; rotationFound = true; break; }
+                                        { selectedBoxRotation = desired; rotationFound = true; Debug.Log($"[Pickup Path] {name} | {direction} sign={sign} roll={roll} lift={lift:F3} rise={rise:F3} offset={waypoint.ToString("F3")} attempts={rotationAttempts}", this); break; }
                                     rejectedPath = rejectedRotation = armIK.Status;
                                     yield return null;
                                     if (cancelled) 
@@ -741,9 +748,7 @@ public sealed class BoxAttacher : MonoBehaviour
                         { rejectedPath = "검증한 접근 경로 시작 실패"; continue; }
                 }
 
-                //  4-3) 이 면 · 손목 각도로 정한다 (Z는 PlanSuctionApproach()가 이미 이동을 시작했다)
-                selectedSign = sign;
-                contactRotation = rotation;
+                //  4-3) 검증한 면 · 손목 각도로 정한다
                 requiredSuctionPoint = point;
                 requiredSuctionNormal = normal;
                 found = true;
@@ -774,8 +779,6 @@ public sealed class BoxAttacher : MonoBehaviour
         //  6) 들어 올리기 (4 cm 이상 올라가야 한다)
         float bottom = box.bounds.min.y;
         Status = "5×6cm 면 흡착 후 들어 올리기";
-        if (originalZ) { yield return Move(tcp.position + Vector3.up * liftHeight, tcp.rotation); }
-        else
         {
             if (!armIK.StartPreparedSuctionLift())
                 { Status = direction + " 방향 사전 상승 경로 시작 실패 · " + armIK.Status; routine = null; yield break; }
@@ -785,20 +788,9 @@ public sealed class BoxAttacher : MonoBehaviour
             { Status = "흡착 상승 실패 · " + armIK.Status; routine = null; yield break; }
 
         //  7) 5 × 6 면이 위로 오게 돌리기 (목표 자세와 6° 안이어야 한다)
-        Quaternion desiredBox = originalZ ? tote.PlacementRotation(selectedSign) : selectedBoxRotation;
-        Quaternion delta = desiredBox * Quaternion.Inverse(box.transform.rotation);
-        Quaternion toolRotation = delta * tcp.rotation;
-        if (originalZ)
+        Quaternion desiredBox = selectedBoxRotation;
         {
-            //  Z: 성공했던 기존 동작 그대로. 상자 가운데보다 3.5 cm 위를 중심으로 한 번에 돌린다
-            Vector3 turnCentre = box.bounds.center + Vector3.up * .035f;
-            Vector3 toolPoint = turnCentre + delta * (tcp.position - box.bounds.center);
-            Status = "Z 방향 · 5×6cm 면을 위로 회전";
-            yield return Move(toolPoint, toolRotation);
-        }
-        else
-        {
-            //  X · Y: 미리 계산한 경로로 회전 대기 위치까지 옮긴 뒤 나눠 돌린다
+            //  X · Y · Z: 미리 계산한 경로로 회전 대기 위치까지 옮긴 뒤 나눠 돌린다
             Status = direction + " 방향 · 흡착 유지 후 회전 대기 위치로 이동";
             if (!armIK.StartPreparedSuctionTransfer())
                 { Status = direction + " 방향 중간 위치 이동 시작 실패 · " + armIK.Status; routine = null; yield break; }
@@ -824,7 +816,7 @@ public sealed class BoxAttacher : MonoBehaviour
         Vector3 releaseCentre = tote.DropCentre(box, slotCentre);
         Vector3 releasePoint = releaseCentre + offset;
         float carryY = Mathf.Max(tcp.position.y, rim + clearance + offset.y, place.y + clearance);
-        toolRotation = tcp.rotation;
+        Quaternion toolRotation = tcp.rotation;
         Status = "수거함 위로 운반";
         yield return Move(new Vector3(tcp.position.x, carryY, tcp.position.z), toolRotation);
         if (!Arrived) { routine = null; yield break; }

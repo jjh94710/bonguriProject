@@ -83,3 +83,51 @@ TerminalA/B/C의 ConveyorLine에 Use Surface Path를 켜고 실제 벨트 Collid
 Verify Classified Box Conveyor Routes는 실제 CellController의 판정·판독·분기를 거친 도착을 확인한다. 도착 검증 중에는 Play 세션의 적재 감시 배열만 비우고 표면 경로 속도를 1m/s로 바꿔 상자를 끝에 보존한다. 저장된 씬과 정상 운전의 적재 연결은 유지한다.
 
 통합 경로 재검증에서도 실제 투입 상자 3개가 판정·판독·분기를 거쳐 A/B/C 최종 정지점에 도착했다(passed=true). 최종 상자 중심에서 로봇 베이스까지 거리는 각각 약 0.44/0.43/0.46m다. 롤러 모서리의 수평 접촉 법선은 최대 30mm 범위에서 위로 보정하고, 해소되지 않으면 이송을 정지한다. results/conveyor_route_check/latest.json 및 events.log에 기록했다. 흡착·수거함 적재는 이 도착 검사에서 실행하지 않았다.
+### B 진입 직후 역행 수정
+
+B는 첫 직선 벨트의 중간으로 진입하는데 최초 경로 생성기가 벨트 상류 끝을 먼저 경유하도록 만들었다. 따라서 TerminalB 인계 직후 상자가 잠깐 상류로 이동한 뒤 방향을 바꿨다. 같은 시각 두 번째 상자의 C 푸셔가 작동해 푸셔 간섭처럼 보였다. 기존 좌표 기록에서 BOX-0001이 19.661~20.165초 사이 X=-2.5313에서 -2.1884로 역행한 것을 확인했다.
+
+B의 첫 직선은 현재 Entry에서 하류 끝으로 직접 이어지도록 생성기를 수정했고, 씬의 TerminalB SurfaceRoute도 다시 구성했다. A/C 경로와 푸셔 동작은 변경하지 않았다. Verify Classified Box Conveyor Routes에는 B 진입 이후 매 갱신의 실제 Rigidbody 위치를 진행 방향으로 투영해 1mm를 넘는 역행을 실패로 처리하는 검사를 추가했다. 결과 JSON에 bDirectionSamples와 maximumBReverseStep을 기록한다.
+
+수정 후 같은 고정 시드의 실제 상자 3개로 재검증했다. A/B/C 모두 최종 정지점에 도착했고, C/A 푸셔 작동을 포함한 B 위치 2,540회 비교에서 최대 역행량은 0m였다(passed=true).
+
+### 실제 흡착 집기 확인
+
+Verify Actual Suction Pickup 에디터 검사로 실제 CellController 투입·분류·이송·집기 요청을 실행했다. 테스트 중만 표면 이송 속도를 1m/s로 설정했다. 세 로봇 모두 해당 상자를 전달받았으나 흡착 접촉 자세를 찾지 못해 Attached/Lifted/Placed가 모두 false, Processed=0이었다. A는 X 방향 경로에서 IK 위치/각도 오차 202.1mm/12.7도, B는 Z 방향 124.3mm/64.6도, C는 Z 방향 117.3mm/63.4도를 보고했다. B/C는 두 번의 시도 모두 실패했고, A는 첫 시도 실패를 확인한 시점에 검사를 종료했다. 이 수치는 접촉 자세 풀이의 오차이며 로봇 베이스와 상자 간 거리가 아니다. 위치만 가깝다고 실제 흡착 자세가 가능한 것은 아니므로 집기 정지점·흡착면·IK 접근 자세를 함께 조정해야 한다. 원본은 results/pickup_check/latest.json 및 events.log에 보존했다. 공정/로봇 실행 코드는 이번 확인에서 변경하지 않았다.
+
+### 현재 C 기준 A/B 배치 맞춤
+
+사용자가 집기·적재에 성공한 현재 C 배치를 기준으로, 각 최종 벨트의 진행 방향 좌표계에서 A/B 로봇과 수거함의 상대 위치·회전을 맞췄다. 로봇 받침대는 PartRobot 그룹과 함께 이동했다. 로봇 베이스의 정지점 상대 좌표는 세 터미널 모두 (0.0474,-0.0650,0.5753)m다. A 로봇 위치는 (-18.6845,0.7990,-2.0735), B는 (-18.3945,0.7990,1.8365)로 조정했다. A/B 수거함은 Y=0.3898에서 C와 같은 Y=0.7971로 높였다. C 배치와 벨트 경유점은 그대로 유지했다. 수정 전 씬은 Temp/BonguriIntegrationBackup/before_match_loading_C_20261103_181751.unity에 보존했다.
+
+첫 검증에서는 A의 X 방향 상자가 실제 흡착·상승·수거함 배치에 성공했다. B/C의 Z 방향 상자는 흡착 접촉 자세 계산에 실패했다. 이는 배치 조정과 별도로 남은 방향별 경로 문제다. 원본은 results/pickup_check/after_layout_random.json 및 after_layout_random_events.log에 보존했다.
+
+이어 실제 투입·판정·판독·분류 경로는 유지하고, 시험 중에만 새 상자의 윗면은 유지한 채 yaw=90도로 통일해 X 방향 흡착을 비교했다. A/B/C 모두 실제 흡착·약 0.227m 상승·수거함 첫 슬롯 배치와 완료 집계에 성공했다(Processed=3). results/pickup_check/after_layout_uniform_x.json 및 after_layout_uniform_x_events.log에 보존했다. 정상 투입의 무작위 방향이나 IK 실행 코드는 바꾸지 않았다. 따라서 동일 방향에서는 배치 일치 효과를 확인했고, Z 방향 실패는 별도 남은 문제다.
+
+### 방향별 상자 1개 직접 집기 패널
+
+Play의 Bonguri 통합 시운전 패널에서 A/B/C 로봇을 고르고 X/Y/Z 방향 1개 버튼을 누르면 해당 터미널 최종 벨트 위에 시험 상자 1개를 생성해 BoxAttacher.TryLoadBox로 직접 인계한다. 축은 5×6cm 흡착면 법선의 월드 방향이다. X는 yaw=90도, Y는 pitch=90도, Z는 기본 회전이다. Y 방향을 교정 공정에서 다시 바꾸지 않도록 투입·교정·판독·분류는 생략하며, 통합 처리 수에는 포함하지 않는다. 성공 상자는 수거함에 남고 실패 상자는 실패한 시험 상자 정리 버튼으로 제거한 뒤 다시 시험한다. 흡착/이동 중 삭제 및 중복 생성은 막는다. 통합 운전과 직접 집기 시험의 동시 시작도 막는다. 컴파일과 Game 패널 표시, 실제 PICKUP-A-X-1 단일 생성 및 집기 접근을 확인했다.
+
+### Z 방향 집기·회전 경로 수정
+
+Z 방향의 기존 IK 탐색은 손목이 벨트 아래로 가는 해에 수렴해 안전 자세 조건에서 탈락했다. BackArmIK에서 기존 접촉 풀이 실패 시 손목/베이스 각도를 바꾼 초기값을 추가로 시도한다. 초기값은 관절 제한으로 자르고, 접촉 위치 1.5mm·각도 1.5도와 팔꿈치·손목 높이 조건은 그대로 검사한다. 조건 없는 풀이는 후보 초기값 계산에만 쓰고 실제 경로에는 안전 조건을 만족한 해만 사용한다.
+
+BoxAttacher의 Z 방향도 Z Direction 설정으로 접근·상승·이동·분할 회전을 집기 전에 검증한다. 기존의 흡착 후 단일 회전 경로는 제거했다. 현재 배치에서 검증된 손목 180도와 로봇 쪽/옆쪽 경유점을 먼저 시도하지만, 모든 후보는 동일한 전체 경로 검증을 거친다. Z 방향의 든 상자 이동 중간 샘플은 실제 관절 구동 도착 기준과 같은 2도 이내로 풀고, 접촉과 최종 배치 끝점의 1.5도 기준은 유지한다.
+
+실제 Play에서 Z 상자를 직접 생성한 A/B/C 모두 흡착·약 0.228m 상승·수거함 첫 슬롯 배치에 성공했다. 이후 실제 투입·ONNX·OCR·분류·컨베이어 이송을 포함한 상자 3개도 적재와 Processed=3까지 확인했다(B/C=Z, A=X). C는 첫 접근 계획 실패 후 기존 자동 재시도의 두 번째 시도에서 성공했다. 모든 상자 방향·연속 만적 시험을 통과했다는 뜻은 아니다. 원본은 results/pickup_diagnosis/z_all_placed.json, z_integration_passed.json, z_integration_events.log, summary.json이다. 임시 접촉/관절 탐색 진단 코드는 제거했고, 재현용 에디터 Z 직접 집기 시험만 남겼다.
+
+### 수거함별 8개 연속 적재 검증
+
+현재 씬의 받침대를 포함한 배치에서 A/B/C 각각 8개, 총 24개를 실제 흡착·운반·적재했다. 집기 방향은 X/Y/Z/X/Y/Z/X/Y 순서였다. 아래층 4칸 뒤 위층 4칸의 적재 순서를 확인했고, 완료 뒤 세 수거함의 모든 슬롯 위치·자세·안정 조건과 상자 사이 겹침 검사를 통과했다. 9번째 상자는 TryLoadBox가 만적 사유로 접수를 거부했으며 Count=8과 로봇 대기 상태를 유지했다. 실제 결과는 results/eight_box_check/latest.json에 보존한다.
+
+시험은 투입·분류를 생략하고 각 로봇 앞에 상자를 하나씩 생성한 적재 집중 검증이다. 컨트롤러의 만적 대기열·자동 비우기·AGV 반출을 검증한 것은 아니다. 완료 장면은 Play 일시정지 상태로 남겼다. 재현 메뉴는 Tools > Bonguri > Integration > Verify Eight Boxes Per Tote A B C이며, 빈 수거함의 새 Play 세션에서 실행한다.
+
+
+### 터미널 적재 책임을 LoadSequence로 이동
+
+CellController는 전체 운전 시작/정지, 알람, 최종 Finish 집계를 맡고 A/B/C 로봇에 붙인 LoadSequence를 시작/중단한다. LoadSequence가 NextLine 이송, 최종 정지점 대기, 집기 거리 확인, TryLoadBox 인계, 최대 2회 시도(회당 180초), 실제 PlacedBoxes 확인 뒤 TakeAway 및 Finish(box, 실제 터미널), 실패 상자 보존/수동 재시도, 만적 대기를 담당한다. CellController의 중복 적재 루프는 제거했다. 만적 자동 삭제는 적용하지 않았으며 EmptyContainer는 작업자 명령으로만 동작한다. BoxAttacher/BackArmIK 및 로봇·수거함 위치는 변경하지 않았다. 연결 메뉴 Connect Terminal Loading To Cell은 LoadSequence 세 개와 CellController 참조를 설정한다.
+
+실제 투입 → ONNX 판정 → OCR 판독 → 분류 → 벨트 이송 → 적재 시험에서 3개 모두 실제 적재·집계에 성공했다(A=X, B/C=Z). C는 첫 경로 계획 실패 후 두 번째 시도로 완료했다. 원본 results/load_sequence_check/integration.json, integration_events.log. 첫 실행은 검증 도구의 전체 150초 제한이 먼저 끝나 중단됐고, 도구의 전체 대기를 600초로 늘려 재검증했다. 공정의 회당 적재 제한은 180초를 유지했다.
+
+추가로 Verify LoadSequence Transfer Retry And Full Totes 메뉴에서 로봇별 터미널 입구에 X/Y/Z/X/Y/Z/X/Y 상자를 Feed하여 실제 이송·정지·적재를 확인했다. 이 시험은 상류 판정/판독/분류와 Cell 집계를 제외하고 Play 중에만 sequence.cell=null로 단독 실행한다. A 첫 상자의 제한시간을 일시적으로 0으로 만들어 자동 2회 시도 복구를 확인했고, B 첫 상자를 NG로 지정해 움직임/집계 없이 보존되는지 확인한 뒤 목적지를 고쳐 RetryFailed로 복구했다.
+
+B/C는 각각 8칸 위치·자세·안정·상자 겹침 검사를 통과했다. 각각 9번째 상자가 만적 상태에서 벨트 정지점/kinematic/LoadedCount=8을 유지하는지 확인하고, EmptyContainer로 8개를 비운 뒤 동일 9번째 상자의 실제 적재 및 LoadedCount=9, EmptiedCount=8까지 확인했다. A는 2개 적재 후 세 번째 Z 방향에서 두 번 모두 경로 탐색에 실패해 작업자 확인 대기로 남았으므로 전체 연속 시험 결과는 실패다. A의 같은 상자를 Inspector의 BoxAttacher.LoadNextBox로 직접 실행해도 접근 후보 3개·회전 검사 216회·중간 IK 오차 3.1mm/0.8도의 동일 경로 실패를 재현했다. 이는 흡착 전 경로 계산 비교이며, 직접 실행 시 상자는 실패 뒤 kinematic 상태를 유지했다. LoadSequence를 우회해도 실패하므로 해당 벨트 정지점/이전 자세에서의 로봇 경로 문제를 별도로 해결해야 한다. 이전 8개 직접 생성 시험 성공이 실제 벨트 정지 조건의 모든 연속 집기를 보장하지는 않는다. 원본 results/load_sequence_check/latest.json, events.log, direct_A_comparison.json. 시험 종료 후 Play를 나가 시험 전용 참조·속도·제한시간 변경을 복원했다.
