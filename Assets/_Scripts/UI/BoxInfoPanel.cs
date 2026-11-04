@@ -5,6 +5,8 @@ using UnityEngine;
 public sealed class BoxInfoPanel : MonoBehaviour
 {
     [Header("표시할 박스")]
+    [InspectorName("판독 구간 (ReadLine)")]
+    [Tooltip("판독 위치에 도착한 박스로 즉시 전환. 떠난 뒤에도 마지막 박스를 표시합니다.")]
     [SerializeField] ConveyorLine correctionLine;
     [Tooltip("공정 벨트가 연결되지 않은 수동 시험에서만 표시할 박스")]
     [SerializeField] BoxInfo previewBox;
@@ -13,6 +15,7 @@ public sealed class BoxInfoPanel : MonoBehaviour
     [SerializeField, Min(.05f)] float refreshInterval = .2f;
     [SerializeField] Camera[] viewCameras;
     float nextRefresh;
+    BoxInfo trackedBox;
     static readonly Color Normal = new Color(.92f,.95f,1f);
     static readonly Color Muted = new Color(.58f,.66f,.75f);
     static readonly Color Good = new Color(.35f,.88f,.68f);
@@ -24,9 +27,8 @@ public sealed class BoxInfoPanel : MonoBehaviour
     {
         var canvas=GetComponentInParent<Canvas>();
         if(canvas!=null && viewCameras!=null) foreach(var camera in viewCameras) if(camera!=null && camera.isActiveAndEnabled){canvas.targetDisplay=camera.targetDisplay;break;}
-        // Once a line is connected, an empty station must show waiting, not an old parcel.
-        var box = correctionLine != null ? correctionLine.CurrentBox : previewBox;
-        Set(sourceText, correctionLine != null ? "교정 스테이션" : previewBox != null ? "수동 확인" : "박스 대기", Muted);
+        var box = DisplayBox();
+        Set(sourceText, correctionLine != null ? Stage(box) : previewBox != null ? "수동 확인" : "박스 대기", Muted);
         if(box==null){Set(boxText,"대기 중",Muted);Set(labelText,"—",Muted);Set(destinationText,"—",Muted);Set(correctionText,"박스 투입 대기",Muted);return;}
         Set(boxText,string.IsNullOrWhiteSpace(box.boxId)?box.gameObject.name:box.boxId,Normal);
         // Display recognition output only. labelNumber/labelRegion are training ground truth.
@@ -42,6 +44,30 @@ public sealed class BoxInfoPanel : MonoBehaviour
         else if(box.judgedFace==BoxFace.Top || box.rotationCount>0){correction="교정 완료 · 회전 "+box.rotationCount+"회";color=Good;}
         else {correction="미확인";color=Muted;}
         Set(correctionText,correction,color);
+    }
+    BoxInfo DisplayBox()
+    {
+        if (correctionLine == null) return previewBox;
+        if (!Application.isPlaying) return correctionLine.CurrentBox;
+        var current = correctionLine.CurrentBox;
+        // Switch at the reading stop, regardless of the previous parcel's completion.
+        // Keep its BoxInfo while the station is empty, so recognition can update live.
+        if (current != null) trackedBox = current;
+        return trackedBox;
+    }
+    static string Stage(BoxInfo box)
+    {
+        if (box == null) return "박스 대기";
+        switch (box.state)
+        {
+            case BoxState.Transferring: return "판독 구간으로 이송";
+            case BoxState.Reading: return "송장 판독 중";
+            case BoxState.Sorting: return "분류 구간";
+            case BoxState.Loading: return "수거함 적재 중";
+            case BoxState.Loaded: return "적재 완료";
+            case BoxState.Exception: return "NG 처리 완료";
+            default: return "판독 스테이션";
+        }
     }
     static void Set(TMP_Text target,string value,Color color){if(target==null)return;if(target.text!=value)target.text=value;target.color=color;}
 }

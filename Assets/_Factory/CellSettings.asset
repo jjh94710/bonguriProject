@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b94379fe80a29142ae77f688e8b1088, type: 3}
   m_Name: CellSettings
   m_EditorClassIdentifier: Assembly-CSharp::CellSettings
-  feedInterval: 10
+  feedInterval: 90
   faceTop: 0.7
   faceSide: 0.05
   faceBottom: 0.1

@@ -63,6 +63,8 @@ public class ConveyorLine : MonoBehaviour
 
     [Tooltip("줄 선 상자 사이의 간격 m (default: 0.03)")]
     [SerializeField] float gap = 0.03f;
+    [Tooltip("정지점에서 작업 중인 상자 뒤에 확보할 여유 거리 m. 교정 로봇 작업 공간용.")]
+    [Min(0f)][SerializeField] float stationApproachClearance;
 
     [Tooltip("벨트 폭 m. 상자 중심이 이 폭 밖으로 나가면 이송 실패로 본다 (default: 0.2)")]
     [SerializeField] float beltWidth = 0.2f;
@@ -402,7 +404,7 @@ public class ConveyorLine : MonoBehaviour
             if (!passedStop) { limit = Mathf.Min(limit, stopAt); }
             // 로봇이 상자를 들어도 정지점 인계가 끝날 때까지 다음 상자가 점유하지 않는다.
             if (!passedStop && CurrentBox != null && CurrentBox != box)
-                limit = Mathf.Min(limit, stopAt - HalfSize(CurrentBox, flow) - HalfSize(box, flow) - gap);
+                limit = Mathf.Min(limit, stopAt - HalfSize(CurrentBox, flow) - HalfSize(box, flow) - Mathf.Max(gap, stationApproachClearance));
 
             int index = boxes.IndexOf(box);
             if (index > 0 && boxes[index - 1] != null)

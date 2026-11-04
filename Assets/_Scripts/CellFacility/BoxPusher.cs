@@ -39,6 +39,8 @@ public class BoxPusher : MonoBehaviour
 
     [Tooltip("(선택) 밀어낼 상자를 넣을 NG 토트 (NG 푸셔 → NgTote). To Line이 비어 있을 때 쓴다")]
     [SerializeField] NgTote toTote;
+    [Tooltip("월드 좌표 밀기 방향. 0이면 기존 Transform 앞쪽 사용. 판 모델 회전과 별도로 설정.")]
+    [SerializeField] Vector3 worldPushDirection;
 
     //  ---------------- 동작 ----------------
     [Header("동작")]
@@ -83,7 +85,7 @@ public class BoxPusher : MonoBehaviour
     {
         get
         {
-            Vector3 direction = transform.forward;
+            Vector3 direction = worldPushDirection.sqrMagnitude > .000001f ? worldPushDirection : transform.forward;
             direction.y = 0f;
             return direction.normalized;
         }
