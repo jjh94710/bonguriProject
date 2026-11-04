@@ -83,8 +83,7 @@ public class CellController : MonoBehaviour
 
     [Header("터미널 적재 (A / B / C)")]
     [Tooltip("로봇별 LoadSequence. 비우면 분류까지만 돈다. 전체 운전 시작 · 정지는 CellController가 지시한다")]
-    [FormerlySerializedAs("loadSequences")]
-    [SerializeField] LoadSequence[] loaders = new LoadSequence[0];
+    [SerializeField] LoadSequence[] loadSequences = new LoadSequence[0];
 
     [Tooltip("(선택) 세션 로그 (ProductionLog). 같은 오브젝트에 붙여 넣는다. 비우면 CSV를 남기지 않는다")]
     [SerializeField] ProductionLog log;
@@ -400,7 +399,7 @@ public class CellController : MonoBehaviour
 
         Coroutine correctLoop = StartCoroutine(CorrectStationLoop());
         Coroutine readLoop = StartCoroutine(ReadStationLoop());
-        foreach (var sequence in loaders) { sequence.StartLoading(); }
+        foreach (var sequence in loadSequences) { sequence.StartLoading(); }
 
         while (!alarmActive)
         {
@@ -436,15 +435,15 @@ public class CellController : MonoBehaviour
     public bool ValidateTerminalConfiguration(out string error)
     {
         error = null;
-        if (loaders == null)
-        { error = "Loaders 배열이 없습니다."; return false; }
+        if (loadSequences == null)
+        { error = "LoadSequences 배열이 없습니다."; return false; }
         var destinations = new HashSet<Destination>();
         var lanes = new HashSet<ConveyorLine>();
         var attachers = new HashSet<BoxAttacher>();
-        foreach (var sequence in loaders)
+        foreach (var sequence in loadSequences)
         {
             if (sequence == null)
-            { error = "Loaders에 빈 칸이 있습니다."; return false; }
+            { error = "LoadSequences에 빈 칸이 있습니다."; return false; }
             if (!sequence.ValidateConfiguration(out error)) { return false; }
             if (sequence.Cell != this || !destinations.Add(sequence.Terminal) ||
                 !lanes.Add(sequence.EndLine) || !attachers.Add(sequence.Attacher))
@@ -456,15 +455,15 @@ public class CellController : MonoBehaviour
     // 적재에 실패해 레인 끝에 남은 상자를 그 터미널 로봇이 다시 집게 한다 (작업자가 원인을 고친 뒤).
     public void RetryTerminalLoading(Destination terminal)
     {
-        foreach (var sequence in loaders)
+        foreach (var sequence in loadSequences)
             if (sequence != null && sequence.Terminal == terminal) { sequence.RetryFailed(); }
     }
 
     // 적재 로봇을 모두 멈춘다 (운전 끝, 알람 정지, 꺼질 때).
     void StopTerminalLoaders()
     {
-        if (loaders == null) { return; }
-        foreach (var sequence in loaders)
+        if (loadSequences == null) { return; }
+        foreach (var sequence in loadSequences)
             if (sequence != null) { sequence.StopLoading(); }
     }
 
@@ -797,7 +796,7 @@ public class CellController : MonoBehaviour
         }
 
         //  적재 · 로그: 비어 있으면 알리기만 한다
-        if (loaders.Length == 0) { Debug.Log("[Cell] Loaders 칸이 비어 있어 분류(레인 끝)까지만 돕니다.", this); }
+        if (loadSequences.Length == 0) { Debug.Log("[Cell] LoadSequences 칸이 비어 있어 분류(레인 끝)까지만 돕니다.", this); }
         if (log == null) { Debug.Log("[Cell] Log 칸이 비어 있어 CSV 로그를 남기지 않습니다.", this); }
 
         //  교정 로봇: 비어 있으면 자리 표시로 돌린다. 있으면 제한 시간이 로봇 동작보다 짧은지 본다
