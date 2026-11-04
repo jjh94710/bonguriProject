@@ -15,9 +15,6 @@ using UnityEngine;
 //  [송장 글자] numberText · regionText는 설계서대로 TextMeshPro(TMP)이다.
 //             [!] 원본 상자 Prefab(ParcelBox, 봉현님)의 글자는 TextMesh라서 그대로 두고,
 //             [!] 공정용 Variant에서 TextMesh 글자를 끄고 TMP 글자를 새로 둔다
-                    /////   : TODO :
-//             (4단계(LabelLayout) 확인이 끝나면 아래 줄 지우기)
-//             그 전까지 두 칸이 비어 있어도 1 ~ 3단계는 동작한다.
 //  ============================================================
 [DisallowMultipleComponent]
 public class BoxInfo : MonoBehaviour
