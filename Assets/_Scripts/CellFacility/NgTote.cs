@@ -9,6 +9,7 @@ using UnityEngine;
 //      - 정리(Clear)하면 상자를 지우고, 경고를 다시 낼 수 있게 된다.
 //
 //  [사용] NG 푸셔가 미는 자리 끝에 토트 오브젝트를 두고 붙인다. NG 푸셔(BoxPusher)의 To Tote 칸에 넣는다.
+//         NG 푸셔가 NG 레인(ConveyorLine)으로 미는 씬은 From Line 칸에 그 레인을 넣는다. 레인 끝에 선 상자를 이 토트로 옮겨 담는다.
 //         이 오브젝트의 위치 = 바닥 가운데, 앞쪽(+Z) = 줄 방향, 오른쪽(+X) = 열 방향.
 //         선택하면 Scene 뷰에 칸이 하늘색 상자로 보인다 (다음 칸은 노랑).
 //  [!] 쌓인 상자는 kinematic 그대로 둔다 (밀려 떨어지지 않게).
@@ -18,6 +19,7 @@ using UnityEngine;
 //      * ToteBase를 물려받지 않는다. 터미널 컨테이너는 박봉현 버전 ToteBase(흡착 적재 전용)를 쓰므로, NG 토트는 칸 계산을 직접 갖는다 (11/03 팀 협의).
 //      * columns(열 수) 칸을 추가했다. 줄 수는 perLayer ÷ columns (올림)이다.
 //      * 정리를 ⋮ 메뉴 "테스트/NG 토트 정리 (Clear)"로 두었다 (설계서: 테스트 버튼).
+//      * fromLine 칸을 추가했다. 메인 씬은 NG 푸셔가 NG 레인으로 밀기 때문에, 레인 끝 상자를 로봇 없이 바로 수거한다.
 //  ============================================================
 [DisallowMultipleComponent]
 public class NgTote : MonoBehaviour
@@ -26,6 +28,9 @@ public class NgTote : MonoBehaviour
     [Header("연결")]
     [Tooltip("(선택) CellController. 경고 알림 · 설정 읽기 · Finish 호출. 비우면 Console 로그만 남긴다")]
     [SerializeField] CellController cell;
+
+    [Tooltip("(선택) NG 레인 구간. 끝 정지 위치에 선 상자를 이 토트로 옮겨 담는다. 비우면 NG 푸셔가 직접 넣는 상자만 받는다")]
+    [SerializeField] ConveyorLine fromLine;
 
     //  ---------------- 칸 ----------------
     [Header("칸")]
@@ -103,8 +108,19 @@ public class NgTote : MonoBehaviour
         return transform.position + transform.rotation * local;
     }
 
+    // NG 레인 끝에 선 상자를 토트로 옮겨 담는다 (로봇 없이 바로 수거, 한 프레임에 1개).
+    /// fromLine 칸이 비어 있으면 아무것도 하지 않는다.
+    void Update()
+    {
+        if (fromLine == null || !fromLine.HasBoxAtStop) { return; }
+
+        BoxInfo box = fromLine.CurrentBox;
+        fromLine.TakeAway(box);
+        Add(box);
+    }
+
     // 상자를 다음 칸에 놓고 등록한다 → 경고 확인 → cell.Finish(box).
-    /// [호출] BoxPusher (NG 상자를 밀어낸 뒤)
+    /// [호출] BoxPusher (NG 상자를 밀어낸 뒤), Update() (NG 레인 끝 수거)
     /// 상자는 kinematic으로 두고 이 오브젝트의 자식으로 옮긴다. 방향은 그대로 둔다.
     public void Add(BoxInfo box)
     {
@@ -112,7 +128,7 @@ public class NgTote : MonoBehaviour
         if (boxes.Contains(box)) { return; }
 
         if (IsFull)
-            { Debug.LogWarning($"[Tote] {name}: 가득 찬 상태에서 {box.boxId}를 받았습니다 ({Count}/{Capacity}).", this); }
+        { Debug.LogWarning($"[Tote] {name}: 가득 찬 상태에서 {box.boxId}를 받았습니다 ({Count}/{Capacity}).", this); }
 
         //  1) 다음 칸에 놓는다 (바닥이 칸 높이에 닿게)
         Vector3 position = NextSlot() + Vector3.up * ConveyorLine.HalfSize(box, Vector3.up);

@@ -23,6 +23,9 @@
 /[Uu]ser[Ss]ettings/
 *.log
 
+# Report logs output created after each 'Play' turn
+/[Rr]eports/
+
 # By default unity supports Blender asset imports, *.blend1 blender files do not need to be commited to version control.
 *.blend1
 *.blend1.meta
