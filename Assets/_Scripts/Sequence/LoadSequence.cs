@@ -51,6 +51,9 @@ public class LoadSequence : MonoBehaviour
     [Tooltip("적재 1회 제한 시간(초). 넘으면 BoxAttacher를 멈추고 실패로 본다 (default: 180)")]
     [Min(1f)][SerializeField] float loadTimeLimit = 180f;
 
+    [Tooltip("켜면 수거함이 가득 찼을 때 쌓인 상자를 지우고 이어서 싣는다 (FR-08). 끄면 작업자가 비울 때까지 기다린다 (default: 꺼짐)")]
+    [SerializeField] bool autoEmpty = false;
+
     //  ---------------- 상태 ----------------
     [Header("상태 (보기 전용)")]
     [Tooltip("지금 상태. Play 중에 바뀐다")]
@@ -178,6 +181,13 @@ public class LoadSequence : MonoBehaviour
     {
         if (attacher == null || attacher.tote == null || attacher.Busy || attacher.Attached) { return; }
 
+        int emptied = 0;
+        foreach (var box in attacher.tote.Boxes)
+            if (box != null)
+                { Destroy(box.gameObject); emptied++; }
+        EmptiedCount += emptied;
+        if (cell != null && emptied > 0) { cell.LogEvent("컨테이너 비움", "", $"{terminal} {emptied}개"); }
+
         foreach (var box in attacher.tote.Boxes)
             if (box != null)
                 { Destroy(box.gameObject); EmptiedCount++; }
@@ -285,6 +295,13 @@ public class LoadSequence : MonoBehaviour
             { error = "상자의 Collider/Rigidbody가 없습니다."; }
         else if (Vector3.Distance(loader.transform.position, collider.bounds.center) > maxPickupDistance)
             { error = $"정지점이 로봇 집기 범위 밖입니다 ({Vector3.Distance(loader.transform.position, collider.bounds.center):F2}m). 터미널 이송 경로를 연결하세요."; }
+        //  자동 비우기: 비우고 돌아간다. 다음 루프에서 같은 상자를 집는다 (Destroy는 프레임 끝에 반영)
+        //if (autoEmpty)
+        //{
+        //    EmptyContainer();
+        //    yield return null;
+        //    yield break;
+        //}
         else if (loader.toto.Count >= loader.toto.Capacity)
         {
             //  수거함이 비워지면 자동으로 다시 확인한다. 가득 참을 적재 실패로 반복 집계하지 않는다

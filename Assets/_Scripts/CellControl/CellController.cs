@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 //  ============================================================
 //  CellController
@@ -742,8 +741,8 @@ public class CellController : MonoBehaviour
     //  점검 · 요약
     //  ============================================================
     // 운전 전 확인. 필수 칸이 비었거나 준비가 안 됐으면 이유를 알려 주고 false.
-    /// 필수: Settings, Correct Line, Read Line, Feeder, Face Rig(카메라 5대), Loaders 연결, 학습 정책 모델(Policy일 때), LabelReader 모델(연결했을 때).
-    /// 선택 칸(Correction, Reader, Log, Loaders)이 비어 있으면 어떻게 도는지만 알린다.
+    /// 필수: Settings, Correct Line, Read Line, Feeder, Face Rig(카메라 5대), LoadSequences 연결, 학습 정책 모델(Policy일 때), LabelReader 모델(연결했을 때).
+    /// 선택 칸(Correction, Reader, Log, LoadSequences)이 비어 있으면 어떻게 도는지만 알린다.
     bool Check()
     {
         string missing = settings == null ? "Settings"
