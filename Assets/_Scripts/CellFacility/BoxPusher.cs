@@ -8,6 +8,7 @@ using UnityEngine;
 //      - 상자가 분기 지점에 오면 ConveyorLine이 TryPush()를 부른다. 담당이면 구간에서 빼고(TakeAway) 밀기 시작.
 //      - 판과 상자를 스크립트로 함께 옮긴다. 벨트(ConveyorLine)와 같은 방식이라 상자는 kinematic 그대로다.
 //      - 다 밀면 toLine.Feed(box)로 옆 벨트에 넘기거나(A · C), toTote.Add(box)로 NG 토트에 넣고(NG), 판을 원위치로 되돌린다.
+//      - A · C 푸셔는 같은 분기 지점의 양쪽에 있다. 밀기 전에 반대쪽 판을 벨트 아래로 내리고, 상자가 지나간 뒤 다시 올린다.
 //
 //  [사용] 빈 오브젝트 "Pusher_A" 등에 붙이고, 판(Head)과 분기 지점(DivertPoint)을 자식으로 둔다.
 //         이 오브젝트의 앞쪽(파란 화살표, +Z)이 미는 방향이다.
@@ -20,6 +21,8 @@ using UnityEngine;
 //      * 받을 벨트 입구가 차 있으면 밀지 않는다. ConveyorLine이 상자를 분기 지점에 세워 두고, waitLimit을 넘기면 "분류 실패"로 지나가게 한다.
 //      * 박봉현님 10/30 BoxPusher(실물 벨트 · 물리 밀기 · 수거함 모드)를 이 방식으로 바꿨다.
 //      * To Line과 To Tote가 모두 비어 있으면 밀어낸 상자를 지운다 (다음 구간 없는 ConveyorLine 출구와 같음).
+//      * 반대쪽 판: 박봉현님 10/30 BoxPusher는 밀기 동안 반대쪽 판 오브젝트를 껐다(SetActive). 여기서는 판만 벨트 아래로 내린다.
+//        오브젝트를 끄면 그 푸셔의 BoxPusher도 꺼져 코루틴을 시작할 수 없기 때문이다.
 //  ============================================================
 public class BoxPusher : MonoBehaviour
 {
@@ -39,6 +42,8 @@ public class BoxPusher : MonoBehaviour
 
     [Tooltip("(선택) 밀어낼 상자를 넣을 NG 토트 (NG 푸셔 → NgTote). To Line이 비어 있을 때 쓴다")]
     [SerializeField] NgTote toTote;
+    [Tooltip("월드 좌표 밀기 방향. 0이면 기존 Transform 앞쪽 사용. 판 모델 회전과 별도로 설정.")]
+    [SerializeField] Vector3 worldPushDirection;
 
     //  ---------------- 동작 ----------------
     [Header("동작")]
@@ -50,6 +55,17 @@ public class BoxPusher : MonoBehaviour
 
     [Tooltip("받을 벨트가 차 있을 때 상자를 분기 지점에 세워 두는 최대 시간(초). 넘으면 \"분류 실패\"로 지나간다 (default: 10)")]
     [Min(0f)][SerializeField] float waitLimit = 10f;
+
+    //  ---------------- 반대쪽 판 ----------------    (FR-09)
+    [Header("반대쪽 판")]
+    [Tooltip("(선택) 같은 분기 지점의 반대편 푸셔 (A 푸셔 ↔ C 푸셔). 밀기 동안 그 판을 벨트 아래로 내려 상자가 지나갈 길을 비운다. NG 푸셔는 비운다")]
+    [SerializeField] BoxPusher oppositePusher;
+
+    [Tooltip("반대쪽 판을 내리는 깊이 m. 판 높이보다 크게 두어 판 윗면이 벨트 면 아래로 내려가게 한다 (default: 0.15)")]
+    [Min(0f)][SerializeField] float lowerDepth = 0.15f;
+
+    [Tooltip("반대쪽 판을 내리거나 올리는 시간(초) (default: 0.2)")]
+    [Min(0.01f)][SerializeField] float lowerDuration = 0.2f;
 
     //  ---------------- 테스트 ----------------
     [Header("테스트")]
@@ -65,6 +81,9 @@ public class BoxPusher : MonoBehaviour
     //  ============================================================
     /// 밀기 동작 중 (판이 나갔다가 돌아올 때까지). 이 동안 ConveyorLine은 다음 상자를 분기 지점에 세운다
     public bool IsPushing { get; private set; }
+
+    /// 반대쪽 푸셔가 이 판을 벨트 아래로 내려 둔 상태. 이 동안은 밀지 않는다 (ConveyorLine은 상자를 분기 지점에 세워 둔다)
+    public bool IsLowered { get; private set; }
 
     /// 밀어낸 상자 수 (대시보드 표시)
     public int PushedCount { get; private set; }
@@ -83,11 +102,13 @@ public class BoxPusher : MonoBehaviour
     {
         get
         {
-            Vector3 direction = transform.forward;
+            Vector3 direction = worldPushDirection.sqrMagnitude > .000001f ? worldPushDirection : transform.forward;
             direction.y = 0f;
             return direction.normalized;
         }
     }
+
+    Vector3 raisedPosition;                                 //  내리기 전 판 위치 (다시 올릴 자리)
 
 
     //  ============================================================
@@ -97,13 +118,37 @@ public class BoxPusher : MonoBehaviour
     void Start()
     {
         if (divertPoint == null)
-            { Debug.LogWarning($"[Pusher] {name}: Divert Point가 비어 있습니다. 상자를 세우지도 밀지도 않습니다.", this); }
+        { Debug.LogWarning($"[Pusher] {name}: Divert Point가 비어 있습니다. 상자를 세우지도 밀지도 않습니다.", this); }
 
         if (target == Destination.None || target == Destination.B)
-            { Debug.LogWarning($"[Pusher] {name}: Target이 {target}입니다. B는 직진이라 푸셔가 필요 없습니다. NG · A · C 중 하나로 바꾸세요.", this); }
+        { Debug.LogWarning($"[Pusher] {name}: Target이 {target}입니다. B는 직진이라 푸셔가 필요 없습니다. NG · A · C 중 하나로 바꾸세요.", this); }
 
         if (toLine == null && target != Destination.NG)
-            { Debug.LogWarning($"[Pusher] {name}: To Line이 비어 있습니다. 밀어낸 상자는 지워집니다.", this); }
+        { Debug.LogWarning($"[Pusher] {name}: To Line이 비어 있습니다. 밀어낸 상자는 지워집니다.", this); }
+
+        if (oppositePusher == this)
+        { Debug.LogWarning($"[Pusher] {name}: Opposite Pusher에 자기 자신이 들어 있습니다. 반대편 푸셔를 넣으세요.", this); oppositePusher = null; }
+
+        if (oppositePusher == null && (target == Destination.A || target == Destination.C))
+        { oppositePusher = FindOpposite(); }
+    }
+
+    // 같은 분기 지점(1 cm 안)을 쓰는 반대편 푸셔를 찾는다 (A ↔ C). 없으면 null.
+    /// [호출] Start() (Opposite Pusher 칸이 비어 있을 때)
+    BoxPusher FindOpposite()
+    {
+        if (divertPoint == null) { return null; }
+
+        Destination other = target == Destination.A ? Destination.C : Destination.A;
+        foreach (BoxPusher pusher in FindObjectsByType<BoxPusher>(FindObjectsSortMode.None))
+        {
+            if (pusher == this || pusher.target != other || pusher.divertPoint == null) { continue; }
+            if (Vector3.Distance(pusher.divertPoint.position, divertPoint.position) > 0.01f) { continue; }
+
+            Debug.Log($"[Pusher] {name}: 반대편 푸셔 {pusher.name}를 찾았습니다 (같은 분기 지점).", this);
+            return pusher;
+        }
+        return null;
     }
 
 
@@ -119,9 +164,11 @@ public class BoxPusher : MonoBehaviour
     // 분기 지점에 온 상자를 민다. 담당이 아니거나, 밀기 중이거나, 받을 벨트 입구가 차 있으면 false (상자는 그대로).
     /// [호출] ConveyorLine.CarryRoutine() (상자가 분기 지점에 왔을 때)
     /// 밀기로 하면 line.TakeAway(box)로 구간에서 빼고 PushRoutine()을 시작한다.
+    /// 이 판이 내려가 있거나 반대쪽 푸셔가 밀고 있어도 false. 반대쪽 판이 올라오면 ConveyorLine이 다시 부른다.
     public bool TryPush(ConveyorLine line, BoxInfo box)
     {
-        if (IsPushing || !WantsPushed(box)) { return false; }
+        if (IsPushing || IsLowered || !WantsPushed(box)) { return false; }
+        if (oppositePusher != null && oppositePusher.IsPushing) { return false; }
         if (toLine != null && !toLine.CanAccept) { return false; }
 
         line.TakeAway(box);
@@ -135,10 +182,16 @@ public class BoxPusher : MonoBehaviour
     //  ============================================================
     // 판을 내밀어 상자를 pushDistance만큼 옮기고, 받을 벨트에 넘긴 뒤 판을 되돌린다.
     /// 판이 상자 옆면에 닿은 뒤부터 상자가 같이 움직인다 (닿기 전 거리는 ContactGap()이 잰다).
+    /// 반대쪽 판은 밀기 전에 내리고, 판이 돌아온 뒤 상자가 그 자리를 벗어나면 올린다. 올릴 때까지 IsPushing은 true다.
     /// box가 null이면 판만 움직인다 (테스트).
     IEnumerator PushRoutine(BoxInfo box)
     {
         IsPushing = true;
+
+        //  0) 반대쪽 판을 벨트 아래로 내린다 (상자가 지나갈 길)
+        if (oppositePusher != null)
+        { yield return oppositePusher.LowerRoutine(lowerDepth, lowerDuration); }
+
         Transform head = Head;
         Vector3 direction = PushDirection;
         Vector3 home = head.position;
@@ -171,7 +224,7 @@ public class BoxPusher : MonoBehaviour
                 Debug.Log($"[Pusher] {name}: {box.boxId} 밀어냄 → {toLine.name} | 목적지 {box.destination}", this);
                 while (box != null && !toLine.Feed(box)) { yield return null; }
             }
-            else if(toTote != null)
+            else if (toTote != null)
             {
                 Debug.Log($"[Pusher] {name}: {box.boxId} 밀어냄 → {toTote.name} | 목적지 {box.destination} · 사유 {box.reason}", this);
                 toTote.Add(box);
@@ -190,6 +243,14 @@ public class BoxPusher : MonoBehaviour
             head.position = Vector3.MoveTowards(head.position, home, speed * Time.fixedDeltaTime);
         }
         head.position = home;
+
+        //  4) 상자가 반대쪽 판 자리를 벗어나면 판을 다시 올린다
+        if (oppositePusher != null)
+        {
+            while (oppositePusher.Blocks(box))
+            { yield return new WaitForFixedUpdate(); }
+            yield return oppositePusher.RaiseRoutine(lowerDuration);
+        }
         IsPushing = false;
     }
 
@@ -214,13 +275,67 @@ public class BoxPusher : MonoBehaviour
 
 
     //  ============================================================
+    //  반대쪽 판 (반대편 푸셔가 부른다)
+    //  ============================================================
+    // 판을 depth만큼 벨트 아래로 내린다. 이미 내려가 있으면 그대로 둔다.
+    /// [호출] 반대편 BoxPusher.PushRoutine() 0단계
+    public IEnumerator LowerRoutine(float depth, float duration)
+    {
+        if (IsLowered) { yield break; }
+
+        IsLowered = true;
+        raisedPosition = Head.position;
+        yield return MoveHead(raisedPosition + Vector3.down * depth, depth / duration);
+    }
+
+    // 내려 둔 판을 원래 높이로 올린다.
+    /// [호출] 반대편 BoxPusher.PushRoutine() 4단계
+    public IEnumerator RaiseRoutine(float duration)
+    {
+        if (!IsLowered) { yield break; }
+
+        float depth = Vector3.Distance(Head.position, raisedPosition);
+        yield return MoveHead(raisedPosition, depth / duration);
+        IsLowered = false;
+    }
+
+    // 판을 올렸을 때 상자와 겹치는지. 내려 둔 판의 경계 상자(Bounds)를 올린 자리로 옮겨 잰다.
+    /// 상자가 없거나(지워짐) 판 렌더러 · 상자 Collider가 없으면 겹치지 않는 것으로 본다.
+    public bool Blocks(BoxInfo box)
+    {
+        if (!IsLowered || box == null) { return false; }
+
+        Renderer headRenderer = Head.GetComponentInChildren<Renderer>();
+        Collider boxCollider = box.GetComponent<Collider>();
+        if (headRenderer == null || boxCollider == null) { return false; }
+
+        Bounds raised = headRenderer.bounds;
+        raised.center += raisedPosition - Head.position;
+        return raised.Intersects(boxCollider.bounds);
+    }
+
+    // 판을 goal까지 speed(m/s)로 옮긴다 (FixedUpdate마다).
+    IEnumerator MoveHead(Vector3 goal, float speed)
+    {
+        Transform head = Head;
+        while (Vector3.Distance(head.position, goal) > 0.0005f)
+        {
+            yield return new WaitForFixedUpdate();
+            head.position = Vector3.MoveTowards(head.position, goal, speed * Time.fixedDeltaTime);
+        }
+        head.position = goal;
+    }
+
+
+    //  ============================================================
     //  테스트 (Play 중에만)
     //  ============================================================
     // [테스트] BoxPusher ⋮ 메뉴 → "테스트/판만 밀어 보기" (상자 없이 판이 나갔다 돌아오는지)
     [ContextMenu("테스트/판만 밀어 보기")]
     void TestStroke()
     {
-        if (!Application.isPlaying || IsPushing) { return; }
+        if (!Application.isPlaying || IsPushing || IsLowered) { return; }
+        if (oppositePusher != null && oppositePusher.IsPushing) { return; }
         StartCoroutine(PushRoutine(null));
     }
 
@@ -230,8 +345,8 @@ public class BoxPusher : MonoBehaviour
         if (!showTestButtons) { return; }
 
         GUILayout.BeginArea(new Rect(guiPosition.x, guiPosition.y, 240, 70), GUI.skin.box);
-        GUILayout.Label($"[푸셔 {target}] 밀어낸 수 {PushedCount} | {(IsPushing ? "동작 중" : "대기")}");
-        GUI.enabled = !IsPushing;
+        GUILayout.Label($"[푸셔 {target}] 밀어낸 수 {PushedCount} | {(IsPushing ? "동작 중" : IsLowered ? "판 내림" : "대기")}");
+        GUI.enabled = !IsPushing && !IsLowered;
         if (GUILayout.Button("판만 밀어 보기")) { TestStroke(); }
         GUI.enabled = true;
         GUILayout.EndArea();

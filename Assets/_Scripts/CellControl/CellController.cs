@@ -77,9 +77,15 @@ public class CellController : MonoBehaviour
     [SerializeField] LoadSequence[] loadSequences = new LoadSequence[0];
     public bool IsAlarmActive => alarmActive;
 
+    [Tooltip("상자 처리 결과와 운전 이벤트를 CSV로 기록한다")]
+    [SerializeField] ProductionLog log;
+    public ProductionLog Log => log;
+    BoxInfo stationBox;
+    public float StationWaitSeconds => stationBox != null ? Time.time - stationBox.correctArriveTime : 0f;
+    public float LastStationSeconds { get; private set; }
+
                         ///// : TODO : 
     //  [스크립트 구현 마다] 아래 칸은 해당 스크립트를 만들 때 하나씩 연다.
-    //      log (ProductionLog)                      세션 로그
     //      제한 시간: supplyTimeout 30, readTimeout 2, inferenceTimeout 1 (초)
 
 
@@ -215,6 +221,7 @@ public class CellController : MonoBehaviour
         }
         PendingMode = mode;
         Debug.Log($"[Cell] 제어 방식 예약: {mode} (다음 상자부터)", this);
+        if (log != null) log.WriteModeChange(mode);
         return true;
     }
 
@@ -231,8 +238,7 @@ public class CellController : MonoBehaviour
 
         Debug.LogWarning($"[Cell] 경고 | {type} | {boxId} ({consecutiveErrors}회 연속)", this);
         OnAlarm?.Invoke(type, boxId);
-        ///// : TODO : 
-        //  [다음 단계] log.Event(type, boxId);
+        LogEvent(type, boxId);
 
         if (consecutiveErrors >= maxConsecutiveErrors && !alarmActive)
         {
@@ -247,6 +253,7 @@ public class CellController : MonoBehaviour
             //  [다음 단계] 벨트 정지 (ConveyorLine에 정지 명령을 만들 때)
 
             Debug.LogError($"[Cell] 알람 정지 | {type} {consecutiveErrors}회 연속", this);
+            LogEvent("알람 정지", boxId, type);
         }
     }
 
@@ -259,6 +266,12 @@ public class CellController : MonoBehaviour
         consecutiveErrors = 0;
         lastAlarmType = null;
         Debug.Log("[Cell] 알람 해제 | Run()으로 다시 시작", this);
+        LogEvent("알람 해제", "");
+    }
+
+    public void LogEvent(string type, string boxId, string detail = "")
+    {
+        if (log != null) log.WriteEvent(type, boxId, detail);
     }
 
 
@@ -313,8 +326,7 @@ public class CellController : MonoBehaviour
         }
 
         Debug.Log($"[Cell] {box.boxId} {result} | 목적지 {box.destination} | 실제 도착 {actualDestination} | 회전 {box.rotationCount}회", this);
-                            ///// : TODO : 
-        //  [다음 단계] log.Write(box);
+        if (log != null) log.WriteBox(box, result);
     }
 
     // 정답 목적지: 송장 정답(labelNumber, labelRegion)을 지역 코드 표로 찾은 터미널. 규칙 위반이면 NG.
@@ -345,6 +357,7 @@ public class CellController : MonoBehaviour
         int target = Processed + count;
         Mode = PendingMode;
         State = CellState.Running;
+        LogEvent("운전 시작", "", $"상자 {count}개 (0=연속), {Mode}");
         Debug.Log($"[Cell] 운전 시작 | {(count > 0 ? $"상자 {count}개" : "연속 운전")} | 제어 방식 {Mode}", this);
 
         //  투입을 먼저 시작한다. Feeder의 칸이 비어 시작하지 못하면 운전도 멈춘다
@@ -379,6 +392,7 @@ public class CellController : MonoBehaviour
         State = CellState.Stopped;
         IsRunning = false;
         Debug.Log($"[Cell] 운전 끝 | {Summary()}", this);
+        LogEvent("운전 끝", "", Summary());
     }
 
     // 처리 중인 상자 수 (투입했지만 아직 Finish()되지 않은 상자).
@@ -435,6 +449,7 @@ public class CellController : MonoBehaviour
                 { yield return null; continue; }
 
             BoxInfo box = correctLine.CurrentBox;
+            stationBox = box;
             box.correctArriveTime = Time.time;
             Mode = PendingMode;         // 제어 방식은 상자 단위로 바뀐다 (FR-12)
             box.mode = Mode;
@@ -449,6 +464,8 @@ public class CellController : MonoBehaviour
             if (!IsRunning) { yield break; }
 
             box.state = BoxState.Transferring;
+            LastStationSeconds = Time.time - box.correctArriveTime;
+            stationBox = null;
             correctLine.Release();
         }
     }

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 //  ============================================================
 //  CellSettings
@@ -17,8 +17,8 @@ public class CellSettings : ScriptableObject
 {
     //  ---------------- 투입 ----------------    (FR-01) 
     [Header("투입")]
-    [Tooltip("상자 투입 간격(초). 운전 제어 패널에서도 1 ~ 30초 범위로 바꿀 수 있다")]
-    [Range(1f, 30f)] public float feedInterval = 10f;
+    [Tooltip("상자 투입 간격(초). 운전 제어 패널에서도 1 ~ 90초 범위로 바꿀 수 있다")]
+    [Range(1f, 90f)] public float feedInterval = 10f;
 
     [Tooltip("송장이 위를 향하는 비율(default: 70%)")]
     [Range(0f, 1f)] public float faceTop = 0.7f;

@@ -63,6 +63,8 @@ public class ConveyorLine : MonoBehaviour
 
     [Tooltip("줄 선 상자 사이의 간격 m (default: 0.03)")]
     [SerializeField] float gap = 0.03f;
+    [Tooltip("교정 로봇이 작업 중인 상자 뒤에 확보할 여유 거리 m")]
+    [Min(0f)][SerializeField] float stationApproachClearance;
 
     [Tooltip("벨트 폭 m. 상자 중심이 이 폭 밖으로 나가면 이송 실패로 본다 (default: 0.2)")]
     [SerializeField] float beltWidth = 0.2f;
@@ -141,6 +143,8 @@ public class ConveyorLine : MonoBehaviour
     //  ============================================================
     /// 정지 위치에 멈춰 있는 상자 (없으면 null)
     public BoxInfo CurrentBox { get; private set; }
+    public BoxInfo LastArrivedBox { get; private set; }
+    public event System.Action<BoxInfo> BoxArrived;
     public Transform StopPoint => stopPoint;
     public ConveyorLine NextLine => nextLine;
 
@@ -402,7 +406,7 @@ public class ConveyorLine : MonoBehaviour
             if (!passedStop) { limit = Mathf.Min(limit, stopAt); }
             // 로봇이 상자를 들어도 정지점 인계가 끝날 때까지 다음 상자가 점유하지 않는다.
             if (!passedStop && CurrentBox != null && CurrentBox != box)
-                limit = Mathf.Min(limit, stopAt - HalfSize(CurrentBox, flow) - HalfSize(box, flow) - gap);
+                limit = Mathf.Min(limit, stopAt - HalfSize(CurrentBox, flow) - HalfSize(box, flow) - Mathf.Max(gap, stationApproachClearance));
 
             int index = boxes.IndexOf(box);
             if (index > 0 && boxes[index - 1] != null)
@@ -497,6 +501,7 @@ public class ConveyorLine : MonoBehaviour
     void Arrive(BoxInfo box)
     {
         CurrentBox = box;
+        LastArrivedBox = box;
         arriveTime = Time.time;
 
         Vector3 error = PositionOf(box) - stopPoint.position;
@@ -510,6 +515,7 @@ public class ConveyorLine : MonoBehaviour
         { Debug.LogWarning($"[Conveyor] {lineName}: {box.boxId} 정지 오차 {LastStopError * 1000f:F0}mm (허용 {stopTolerance * 1000f:F0}mm 초과)", this); }
         else
         { Debug.Log($"[Conveyor] {lineName}: {box.boxId} 정지 위치 도착 (오차 {LastStopError * 1000f:F1} mm)", this); }
+        BoxArrived?.Invoke(box);
     }
 
     //  이 상자가 아직 지나지 않은 다음 푸셔 (index부터, 빈 칸 · 분기 지점이 없는 칸은 건너뛴다). 없으면 null.
