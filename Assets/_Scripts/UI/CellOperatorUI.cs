@@ -13,6 +13,12 @@ public sealed class CellOperatorUI : MonoBehaviour
     [SerializeField, Range(1,90)] float previewInterval=10;
     float nextRefresh;
     void OnEnable(){
+        // 클릭 후 선택 상태에서도 정지 버튼의 빨간색 계열을 유지한다.
+        if(stopButton!=null){
+            var colors=stopButton.colors;
+            colors.selectedColor=colors.highlightedColor;
+            stopButton.colors=colors;
+        }
         resetAlarmButton?.onClick.AddListener(ResetAlarm);
         startButton?.onClick.AddListener(StartCell);stopButton?.onClick.AddListener(StopCell);
         decreaseButton?.onClick.AddListener(Decrease);increaseButton?.onClick.AddListener(Increase);
